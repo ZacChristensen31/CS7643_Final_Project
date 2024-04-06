@@ -2,9 +2,9 @@ import torch
 from torch.autograd import Variable
 
 
-def to_var(x, on_cpu=False, gpu_id=None, async=False):
+def to_var(x, gpu_id=None, async=False):
     """Tensor => Variable"""
-    if torch.cuda.is_available() and not on_cpu:
+    if torch.cuda.is_available():
         x = x.cuda(gpu_id, async)
         #x = Variable(x)
     return x

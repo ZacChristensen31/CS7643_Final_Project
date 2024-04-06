@@ -10,10 +10,11 @@ def load_pickle(path):
     with open(path, 'rb') as f:
         return pickle.load(f)
 
+
 if __name__ == '__main__':
-    config = get_config(mode='train')
-    val_config = get_config(mode='valid')
-    test_config = get_config(mode='test')
+    config = get_config(mode='train',data='iemocap',parse=False)
+    val_config = get_config(mode='valid',data='iemocap',parse=False)
+    test_config = get_config(mode='test',data='iemocap',parse=False)
 
     _RUNS = config.runs
 

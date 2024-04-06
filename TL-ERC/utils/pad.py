@@ -3,19 +3,19 @@ from torch.autograd import Variable
 from .convert import to_var
 
 
-def pad(tensor, length):
+def pad(tensor, length,device):
 
     if isinstance(tensor, Variable):
         var = tensor
         if length > var.size(0):
             return torch.cat([var,
-                              torch.zeros(length - var.size(0), *var.size()[1:]).cuda()])
+                              torch.zeros(length - var.size(0), *var.size()[1:]).to(device)])
         else:
             return var
     else:
         if length > tensor.size(0):
             return torch.cat([tensor,
-                              torch.zeros(length - tensor.size(0), *tensor.size()[1:]).cuda()])
+                              torch.zeros(length - tensor.size(0), *tensor.size()[1:]).to(device)])
         else:
             return tensor
 

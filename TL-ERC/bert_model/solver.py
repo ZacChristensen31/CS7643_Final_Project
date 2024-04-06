@@ -95,7 +95,7 @@ class Solver(object):
         self.model.load_state_dict(model_dict)
 
 
-    @time_desc_decorator('Training Start!')
+    # @time_desc_decorator('Training Start!')
     def train(self):
         min_val_loss = np.inf
         patience_counter=0
