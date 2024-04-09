@@ -1,0 +1,39 @@
+CORECT DATA DOCS
+
+from: https://github.com/leson502/CORECT_EMNLP2023/tree/master
+paper: https://aclanthology.org/2023.emnlp-main.937.pdf
+
+IEMOCAP --> 12h of videos of 2 way convos across 10 speakers. 7433 total utterances across 151 dialogues.
+
+iemocap == 6 emotion classes (happy, sad, neutral, angry, excited, frustrated)
+iemocap_4 == 4 emotion classes (happy/excited & sad/frustrated are merged)
+
+data_iemocap --> dictionary with train, dev, and test sets (pre-processed) 
+--> each data set is a dictionary with the following keys (where n = sentences in convo)
+
+	- vid: str =  ID of video
+	- speakers: list[Str] = IDs of speakers ("M","F"), (length n)
+	- labels: list[int] = emotion labels for each phrase, (length n)
+	- audio: list[list[float]] = audio data for each phrase (n items of size 100)
+		- not sure what these audio floats represent
+	- visual: list[list[float]] = visual data for each phrase (n items of size 512)
+		- not sure what these visual floats represent
+	- text: list[list[float]] = text data for each phrase (n items of size 768)
+		- encoded via bert sentence transformer: https://www.sbert.net/
+	- sentence: List[Str] = text strings (n phrases)
+
+IEMOCAP_features --> raw IEMOCAP features, list of 7 dictionaries + 2 lists
+--> I believe this is the same raw feature dataset as TL-ERC, so opted to update their repo to process the other modalities 
+
+- each dictionary maps video ID str --> 
+	0 = phrase string IDs (str)
+	1 = speaker labels (str)
+	2 = emotion labels (ints)
+	3 = text data   (floats)
+ 	4 = audio data  (floats)
+	5 = visual data (floats)
+	6 = sentence data (str)
+
+- lists of string IDs for train/test sets (not sure how these were determined)
+	7 = train videos
+	8 = test videos

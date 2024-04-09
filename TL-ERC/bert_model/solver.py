@@ -110,7 +110,7 @@ class Solver(object):
             n_total_words = 0
             before_gradient = None
 
-            for batch_i, (conversations, labels, conversation_length, sentence_length, type_ids, masks) in enumerate(tqdm(self.train_data_loader, ncols=80)):
+            for batch_i, (conversations, labels, conversation_length, sentence_length,audio,visual, type_ids, masks) in enumerate(tqdm(self.train_data_loader, ncols=80)):
                 # conversations: (batch_size) list of conversations
                 #   conversation: list of sentences
                 #   sentence: list of tokens
@@ -209,7 +209,7 @@ class Solver(object):
 
         self.model.eval()
         batch_loss_history, predictions, ground_truth = [], [], []
-        for batch_i, (conversations, labels, conversation_length, sentence_length, type_ids, masks) in enumerate(data_loader):
+        for batch_i, (conversations, labels, conversation_length, sentence_length, audio, visual, type_ids, masks) in enumerate(data_loader):
             # conversations: (batch_size) list of conversations
             #   conversation: list of sentences
             #   sentence: list of tokens

@@ -54,6 +54,8 @@ class Config(object):
         self.label_path = self.data_dir.joinpath('labels.pkl')
         self.sentence_length_path = self.data_dir.joinpath('sentence_length.pkl')
         self.conversation_length_path = self.data_dir.joinpath('conversation_length.pkl')
+        self.audio_path = self.data_dir.joinpath('audio.pkl')
+        self.visual_path = self.data_dir.joinpath('visuals.pkl')
 
     def __str__(self):
         """Pretty-print configurations in alphabetical order"""

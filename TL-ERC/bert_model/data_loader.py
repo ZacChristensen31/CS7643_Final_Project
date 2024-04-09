@@ -8,7 +8,7 @@ from pytorch_pretrained_bert.tokenization import BertTokenizer
 SEQ_LEN = 30
 
 class DialogDataset(Dataset):
-    def __init__(self, conversations, labels, conversation_length, sentence_length, data=None):
+    def __init__(self, conversations, labels, conversation_length, sentence_length, audio, visual, data=None):
 
         # [total_data_size, max_conversation_length, max_sentence_length]
         # tokenized raw text of sentences
@@ -22,6 +22,8 @@ class DialogDataset(Dataset):
         # list of length of sentences
         # [total_data_size, max_conversation_length]
         self.sentence_length = sentence_length
+        self.audio = audio
+        self.visual = visual
         self.data = data
         self.len = len(conversations)
 
@@ -76,7 +78,6 @@ class DialogDataset(Dataset):
                 assert len(input_mask) == SEQ_LEN
                 assert len(input_type_ids) == SEQ_LEN
 
-
                 local_sentences.append(input_ids)
                 local_sentence_length.append(len(input_ids))
                 local_type_id.append(input_type_ids)
@@ -99,11 +100,11 @@ class DialogDataset(Dataset):
         labels = self.labels[index]
         conversation_length = self.conversation_length[index]
         sentence_length = self.sentence_length[index]
+        audio = self.audio[index]
+        visual = self.visual[index]
         type_id = self.type_ids[index]
         masks = self.masks[index]
-
-
-        return conversation, labels, conversation_length, sentence_length, type_id, masks
+        return conversation, labels, conversation_length, sentence_length, audio, visual, type_id, masks
 
     def __len__(self):
         return self.len
@@ -111,19 +112,19 @@ class DialogDataset(Dataset):
 
 
 
-def get_loader(sentences, labels, conversation_length, sentence_length, batch_size=100, data=None, shuffle=True):
+def get_loader(sentences, labels, conversation_length, sentence_length, audio, visual, batch_size=100, data=None, shuffle=True):
     """Load DataLoader of given DialogDataset"""
 
-
-    dataset = DialogDataset(sentences, labels, conversation_length,
-                            sentence_length, data=data)
+    dataset = DialogDataset(sentences,
+                            labels,
+                            conversation_length,
+                            sentence_length,
+                            audio,
+                            visual,
+                            data=data)
 
     for sentence, label in zip(sentences, labels):
         assert(np.array(sentence).shape[0] == np.array(label).shape[0])
-
-
-
-
 
     def collate_fn(data):
         """
@@ -142,10 +143,10 @@ def get_loader(sentences, labels, conversation_length, sentence_length, batch_si
         data.sort(key=lambda x: x[2], reverse=True)
 
         # Separate
-        sentences, labels, conversation_length, sentence_length, type_id, mask = zip(*data)
+        sentences, labels, conversation_length, sentence_length, audio, visual, type_id, mask = zip(*data)
 
         # return sentences, conversation_length, sentence_length.tolist()
-        return sentences, labels, conversation_length, sentence_length, type_id, mask
+        return sentences, labels, conversation_length, sentence_length, audio, visual, type_id, mask
 
 
     data_loader = DataLoader(

@@ -15,7 +15,7 @@ project_dir = Path(__file__).resolve().parent
 datasets_dir = project_dir.joinpath('datasets/')
 iemocap_dir = datasets_dir.joinpath('iemocap/')
 iemocap_pickle = iemocap_dir.joinpath("IEMOCAP_features_raw.pkl")
-GLOVE_DIR = ""
+GLOVE_DIR = project_dir.joinpath('glove/')
 
 # Tokenizer
 tokenizer = Tokenizer('spacy')
@@ -25,8 +25,15 @@ class IEMOCAP:
     label index mapping = {'hap':0, 'sad':1, 'neu':2, 'ang':3, 'exc':4, 'fru':5}
     '''
     def load_iemocap_data(self):
-        _, self.videoSpeakers, self.videoLabels, _, _, _, self.videoSentence, trainVid, self.testVid = pickle.load(
-            open(iemocap_pickle, "rb"), encoding="latin1")
+        (sent_ids,
+         self.videoSpeakers,
+         self.videoLabels,
+         text_data,
+         self.videoAudio,
+         self.videoVisual,
+         self.videoSentence,
+         trainVid,
+         self.testVid) = pickle.load(open(iemocap_pickle, "rb"), encoding="latin1")
 
         self.trainVid, self.valVid = train_test_split(
             list(trainVid), test_size=.2, random_state=1227)
@@ -97,17 +104,16 @@ if __name__ == '__main__':
     max_vocab_size = args.max_vocab_size
     min_freq = args.min_vocab_frequency
 
-    
-
     def to_pickle(obj, path):
         with open(path, 'wb') as f:
             pickle.dump(obj, f)
     
     for split_type in ['train', 'valid', 'test']:
-        conv_sentences = [iemocap.videoSentence[vid] for vid in iemocap.vids[split_type]]
-        conv_labels = [iemocap.videoLabels[vid]
-                       for vid in iemocap.vids[split_type]]
 
+        conv_sentences = [iemocap.videoSentence[vid] for vid in iemocap.vids[split_type]]
+        conv_labels = [iemocap.videoLabels[vid] for vid in iemocap.vids[split_type]]
+        conv_audio = [iemocap.videoAudio[vid] for vid in iemocap.vids[split_type]]
+        conv_visual = [iemocap.videoVisual[vid] for vid in iemocap.vids[split_type]]
 
         print(f'Processing {split_type} dataset...')
         split_data_dir = iemocap_dir.joinpath(split_type)
@@ -119,9 +125,8 @@ if __name__ == '__main__':
 
         # fix labels as per conversation_length
         for idx, conv_len in enumerate(conversation_length):
-            conv_labels[idx]=conv_labels[idx][:conv_len]
+            conv_labels[idx] = conv_labels[idx][:conv_len]
 
-        
         sentences, sentence_length = pad_sentences(
             conv_sentences,
             max_sentence_length=max_sent_len,
@@ -136,12 +141,14 @@ if __name__ == '__main__':
             'conversation_length.pkl'))
         to_pickle(sentences, split_data_dir.joinpath('sentences.pkl'))
         to_pickle(conv_labels, split_data_dir.joinpath('labels.pkl'))
-        to_pickle(sentence_length, split_data_dir.joinpath(
-            'sentence_length.pkl'))
+        to_pickle(sentence_length, split_data_dir.joinpath('sentence_length.pkl'))
         to_pickle(iemocap.vids[split_type], split_data_dir.joinpath('video_id.pkl'))
 
-        if split_type == 'train':
+        #currently no procesing/padding being done here
+        to_pickle(conv_visual, split_data_dir.joinpath('visuals.pkl'))
+        to_pickle(conv_audio, split_data_dir.joinpath('audio.pkl'))
 
+        if split_type == 'train':
             print('Save Vocabulary...')
             vocab = Vocab(tokenizer)
             vocab.add_dataframe(conv_sentences)

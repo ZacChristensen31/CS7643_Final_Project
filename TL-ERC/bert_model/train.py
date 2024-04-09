@@ -34,6 +34,8 @@ if __name__ == '__main__':
             labels=load_pickle(config.label_path)[:training_data_len],
             conversation_length=load_pickle(config.conversation_length_path)[:training_data_len],
             sentence_length=load_pickle(config.sentence_length_path)[:training_data_len],
+            audio=load_pickle(config.audio_path)[:training_data_len],
+            visual=load_pickle(config.visual_path)[:training_data_len],
             batch_size=config.batch_size)
 
         eval_data_loader = get_loader(
@@ -41,6 +43,8 @@ if __name__ == '__main__':
             labels=load_pickle(val_config.label_path),
             conversation_length=load_pickle(val_config.conversation_length_path),
             sentence_length=load_pickle(val_config.sentence_length_path),
+            audio=load_pickle(val_config.audio_path),
+            visual=load_pickle(val_config.visual_path),
             batch_size=val_config.eval_batch_size,
             shuffle=False)
         
@@ -49,11 +53,10 @@ if __name__ == '__main__':
             labels=load_pickle(test_config.label_path),
             conversation_length=load_pickle(test_config.conversation_length_path),
             sentence_length=load_pickle(test_config.sentence_length_path),
+            audio=load_pickle(test_config.audio_path),
+            visual=load_pickle(test_config.visual_path),
             batch_size=test_config.eval_batch_size,
             shuffle=False)
-
-
-
 
         # for testing
         solver = Solver
