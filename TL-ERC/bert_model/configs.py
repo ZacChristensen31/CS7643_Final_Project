@@ -77,6 +77,7 @@ def get_config(parse=True, **optional_kwargs):
     # Mode
     parser.add_argument('--mode', type=str, default='train')
     parser.add_argument('--runs', type=int, default=5)
+    parser.add_argument('--modalities', default=['text'], type=list, nargs='+')
 
     # Train
     parser.add_argument('--num_classes', type=int, default=0) 
@@ -88,12 +89,14 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--learning_rate', type=float, default=1e-4)
     parser.add_argument('--optimizer', type=str, default='Adam')
     parser.add_argument('--clip', type=float, default=1.0)
-    parser.add_argument('--checkpoint', type=str, default=None)
+    parser.add_argument('--text_checkpoint', type=str, default=None)
     parser.add_argument('--load_checkpoint', type=str, default=None)
     parser.add_argument('--num_bert_layers', type=int, default=4)
     parser.add_argument('--training_percentage', type=float, default=1.0)
 
     # Currently does not support lstm
+    # TEXT MODEL PARAMETERS
+    parser.add_argument('--text_model', type=str, default='bc_RNN')
     parser.add_argument('--rnn', type=str, default='gru')
     parser.add_argument('--rnncell', type=str, default='gru')
     parser.add_argument('--num_layers', type=int, default=1)
@@ -106,8 +109,18 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--feedforward', type=str, default='FeedForward')
     parser.add_argument('--activation', type=str, default='Tanh')
 
-    # Model
-    parser.add_argument('--model', type=str, default='bc_RNN')
+    #AUDIO MODEL PARAMETERS
+    parser.add_argument('--audio_checkpoint', type=str, default=None)
+
+
+    #VISUAL MODEL PARAMETERS
+    parser.add_argument('--visual_checkpoint', type=str, default=None)
+
+
+    #COMBINATION MODEL PARAMETERS
+    #--> push raw features through single model together?
+    #--> train independently and combine predictions?
+    parser.add_argument('--combined_checkpoint', type=str, default=None)
 
 
     # Utility

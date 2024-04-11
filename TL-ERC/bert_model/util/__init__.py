@@ -1,5 +1,5 @@
 from .convert import *
-from .time_track import time_desc_decorator
+from .time_track import time_desc_decorator, check_done
 from .tensorboard import TensorboardWriter
 from .vocab import *
 from .mask import *

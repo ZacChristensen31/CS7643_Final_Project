@@ -16,6 +16,9 @@ def to_tensor(x):
         x = x.cpu()
     return x.data
 
+def flat_to_var(input):
+    return to_var(torch.LongTensor([i for item in input for i in item]))
+
 def reverse_order(tensor, dim=0):
     """Reverse Tensor or Variable"""
     if isinstance(tensor, torch.Tensor) or isinstance(tensor, torch.LongTensor):

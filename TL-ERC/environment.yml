@@ -89,4 +89,5 @@ dependencies:
     - wcwidth==0.1.7
     - webencodings==0.5.1
     - wrapt==1.11.2
+    - matplotlib
 

@@ -43,6 +43,13 @@ def time_test(arg, kwarg='this is kwarg'):
 def no_arg_method():
     print('this method has no argument')
 
+def check_done(func):
+    def wrapper(self, *args, **kwargs):
+        if not self.done:
+            return func(self, *args, **kwargs)
+        else:
+            print(f"{self.__name__} training complete")
+    return wrapper
 
 if __name__ == '__main__':
     time_test('hello', kwarg=3)

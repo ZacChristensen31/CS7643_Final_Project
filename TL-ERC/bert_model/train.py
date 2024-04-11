@@ -16,7 +16,7 @@ if __name__ == '__main__':
     val_config = get_config(mode='valid',data='iemocap',parse=False)
     test_config = get_config(mode='test',data='iemocap',parse=False)
 
-    _RUNS = config.runs
+    _RUNS = 1
 
     _best_test_loss, _best_test_f1_w, _best_test_f1_m, _best_epoch = [], [], [], []
 
@@ -27,7 +27,6 @@ if __name__ == '__main__':
         # No. of videos to consider
         training_data_len = int(config.training_percentage * \
             len(load_pickle(config.sentences_path)))
-
 
         train_data_loader = get_loader(
             sentences=load_pickle(config.sentences_path)[:training_data_len],
@@ -59,40 +58,39 @@ if __name__ == '__main__':
             shuffle=False)
 
         # for testing
-        solver = Solver
-
-        solver = solver(config, train_data_loader,
+        solver = Solver(config, train_data_loader,
                         eval_data_loader, test_data_loader, is_train=True)
 
         solver.build()
+        solver.train()
+        print('done')
 
-        best_test_loss, best_test_f1_w, best_epoch = solver.train()
+        # to-do: ADD result tracking across multiple runs
+        # maybe generic results tracker class would be helpful...
+        # also would be nice to have confusion matrices, per class accuracies, etc
 
-        print(f"Current RUN: {run+1}")
-
-        print("\n\nBest test loss")
-        print(best_test_loss)
-        print("Best test f1 weighted")
-        print(best_test_f1_w)
-        print("Best epoch")
-        print(best_epoch)
-
-        _best_test_loss.append(best_test_loss)
-        _best_test_f1_w.append(best_test_f1_w)
-        _best_epoch.append(best_epoch)
+        # print("\n\nBest test loss")
+        # print(best_test_loss)
+        # print("Best test f1 weighted")
+        # print(best_test_f1_w)
+        # print("Best epoch")
+        # print(best_epoch)
+        # _best_test_loss.append(best_test_loss)
+        # _best_test_f1_w.append(best_test_f1_w)
+        # _best_epoch.append(best_epoch)
 
 
     # Print final
-    print(f"\n\nAverage across runs:")
-
-    print("Best epoch")
-    print(_best_epoch)
-
-    print("\n\nBest test loss")
-    print(np.mean(np.array(_best_test_loss), axis=0))
-
-    print("Overall test f1 weighted")
-    print(np.array(_best_test_f1_w))
-    
-    print("Best test f1 weighted")
-    print(np.mean(np.array(_best_test_f1_w), axis=0))
+    # print(f"\n\nAverage across runs:")
+    #
+    # print("Best epoch")
+    # print(_best_epoch)
+    #
+    # print("\n\nBest test loss")
+    # print(np.mean(np.array(_best_test_loss), axis=0))
+    #
+    # print("Overall test f1 weighted")
+    # print(np.array(_best_test_f1_w))
+    #
+    # print("Best test f1 weighted")
+    # print(np.mean(np.array(_best_test_f1_w), axis=0))
