@@ -22,7 +22,6 @@ class Model(ABC):
     def __init__(self, config):
         self.config = config
         self.model = None
-        self.optimizer = None
         self.done = False
         self.result_reset()
 
@@ -62,8 +61,10 @@ class Model(ABC):
     def result_reset(self):
         self.min_val_loss = np.inf
         self.patience = 0
+        self.epoch_i = 0
         self.best_epoch = -1
         self.epoch_loss = []
+        self.val_epoch_loss = []
         self.w_train_f1 = []
         self.w_valid_f1 = []
         self.batch_loss_history = []
