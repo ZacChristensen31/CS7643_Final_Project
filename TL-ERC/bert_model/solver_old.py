@@ -64,8 +64,8 @@ class Solver(object):
         for name, param in self.model.named_parameters():
             print('\t' + name + '\t', list(param.size()))
 
-        if self.config.load_checkpoint:
-            self.load_model(self.config.load_checkpoint)
+        if self.config.text_checkpoint:
+            self.load_model(self.config.text_checkpoint)
 
         if self.is_train:
             self.optimizer = self.config.optimizer(

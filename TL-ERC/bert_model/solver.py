@@ -116,6 +116,7 @@ class Model(ABC):
         plt.title(f'{self.__name__} {typ} Curve')
         plt.xlabel('Epoch')
         plt.ylabel(typ)
+        plt.legend()
         plt.show()
 
     @staticmethod
@@ -160,7 +161,7 @@ class TextModel(Model):
         for name, param in self.model.named_parameters():
             print('\t' + name + '\t', list(param.size()))
 
-        if self.config.load_checkpoint:
+        if self.checkpoint is not None:
             self.load_model()
 
         #I removed "is_train" check here because seemed unused?

@@ -81,16 +81,18 @@ def get_config(parse=True, **optional_kwargs):
 
     # Train
     parser.add_argument('--num_classes', type=int, default=0) 
-    parser.add_argument('--batch_size', type=int, default=2)
-    parser.add_argument('--eval_batch_size', type=int, default=2)
-    parser.add_argument('--n_epoch', type=int, default=500)
-    parser.add_argument('--patience', type=int, default=10)
+    parser.add_argument('--batch_size', type=int, default=2)        #really small?
+    parser.add_argument('--eval_batch_size', type=int, default=2)   #really small?
+    parser.add_argument('--n_epoch', type=int, default=500)         #Stops early @ ~15-20
+    parser.add_argument('--patience', type=int, default=5)         #lowered from 10 for efficiency during testing
     parser.add_argument('--minimum_improvement', type=int, default=0.001)
     parser.add_argument('--learning_rate', type=float, default=1e-4)
     parser.add_argument('--optimizer', type=str, default='Adam')
     parser.add_argument('--clip', type=float, default=1.0)
-    parser.add_argument('--text_checkpoint', type=str, default=None)
-    parser.add_argument('--load_checkpoint', type=str, default=None)
+
+    #toggle whether to load pre-trained weights
+    parser.add_argument('--text_checkpoint', type=str, default="../generative_weights/cornell_weights.pkl")
+    # parser.add_argument('--load_checkpoint', type=str, default=None)
     parser.add_argument('--num_bert_layers', type=int, default=4)
     parser.add_argument('--training_percentage', type=float, default=1.0)
 
@@ -112,16 +114,13 @@ def get_config(parse=True, **optional_kwargs):
     #AUDIO MODEL PARAMETERS
     parser.add_argument('--audio_checkpoint', type=str, default=None)
 
-
     #VISUAL MODEL PARAMETERS
     parser.add_argument('--visual_checkpoint', type=str, default=None)
-
 
     #COMBINATION MODEL PARAMETERS
     #--> push raw features through single model together?
     #--> train independently and combine predictions?
     parser.add_argument('--combined_checkpoint', type=str, default=None)
-
 
     # Utility
     parser.add_argument('--print_every', type=int, default=100)
