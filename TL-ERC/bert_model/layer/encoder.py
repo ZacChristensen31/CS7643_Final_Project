@@ -99,7 +99,7 @@ class EncoderRNN(BaseRNNEncoder):
             inputs (Variable, LongTensor): [num_setences, max_seq_len]
             input_length (Variable, LongTensor): [num_sentences]
         Return:
-            outputs (Variable): [max_source_length, batch_size, hidden_size]
+            images (Variable): [max_source_length, batch_size, hidden_size]
                 - list of all hidden states
             hidden ((tuple of) Variable): [num_layers*num_directions, batch_size, hidden_size]
                 - last hidden state
@@ -125,7 +125,7 @@ class EncoderRNN(BaseRNNEncoder):
         hidden = self.init_h(batch_size, hidden=hidden)
         
 
-        # outputs: [batch, seq_len, hidden_size * num_directions]
+        # images: [batch, seq_len, hidden_size * num_directions]
         # hidden: [num_layers * num_directions, batch, hidden_size]
         self.rnn.flatten_parameters()
         outputs, hidden = self.rnn(rnn_input, hidden)
@@ -133,7 +133,7 @@ class EncoderRNN(BaseRNNEncoder):
         outputs, outputs_lengths = pad_packed_sequence(
             outputs, batch_first=self.batch_first)
 
-        # Reorder outputs and hidden
+        # Reorder images and hidden
         _, inverse_indices = indices.sort()
         outputs = outputs.index_select(0, inverse_indices)
 
@@ -179,7 +179,7 @@ class ContextRNN(BaseRNNEncoder):
             encoder_hidden (Variable, FloatTensor): [batch_size, max_len, num_layers * direction * hidden_size]
             conversation_length (Variable, LongTensor): [batch_size]
         Return:
-            outputs (Variable): [batch_size, max_seq_len, hidden_size]
+            images (Variable): [batch_size, max_seq_len, hidden_size]
                 - list of all hidden states
             hidden ((tuple of) Variable): [num_layers*num_directions, batch_size, hidden_size]
                 - last hidden state
@@ -202,11 +202,11 @@ class ContextRNN(BaseRNNEncoder):
         self.rnn.flatten_parameters()
         outputs, hidden = self.rnn(rnn_input, hidden)
 
-        # outputs: [batch_size, max_conversation_length, context_size]
+        # images: [batch_size, max_conversation_length, context_size]
         outputs, outputs_length = pad_packed_sequence(
             outputs, batch_first=True)
 
-        # reorder outputs and hidden
+        # reorder images and hidden
         _, inverse_indices = indices.sort()
         outputs = outputs.index_select(0, inverse_indices)
 
@@ -216,7 +216,7 @@ class ContextRNN(BaseRNNEncoder):
         else:
             hidden = hidden.index_select(1, inverse_indices)
 
-        # outputs: [batch, seq_len, hidden_size * num_directions]
+        # images: [batch, seq_len, hidden_size * num_directions]
         # hidden: [num_layers * num_directions, batch, hidden_size]
         return outputs, hidden
 

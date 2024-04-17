@@ -86,7 +86,7 @@ class bc_RNN(nn.Module):
                                                                     input_conversation_length)
 
 
-        # flatten outputs
+        # flatten images
         # context_outputs: [num_sentences, context_size]
         context_outputs = torch.cat([context_outputs[i, :l, :]
                                      for i, l in enumerate(input_conversation_length.data)])
