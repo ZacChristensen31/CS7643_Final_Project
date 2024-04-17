@@ -4,6 +4,7 @@ from configs import get_config
 from util import Vocab
 import os
 import pickle
+from datetime import datetime
 
 
 def load_pickle(path):
@@ -61,8 +62,32 @@ if __name__ == '__main__':
         solver = Solver(config, train_data_loader,
                         eval_data_loader, test_data_loader, is_train=True)
 
+        outputs = '../run_outputs'
+
+        if not os.path.exists(outputs):
+            os.makedirs(outputs)
+
+        run_timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
+        run_directory = f'{outputs}/{run_timestamp}'
+
+        if not os.path.exists(run_directory):
+            os.makedirs(run_directory)
+
+        # Save Configs for train, test, valid
+        with open(f'{run_directory}/train_config.txt', 'w') as f:
+            f.write(str(config))
+
+        with open(f'{run_directory}/valid_config.txt', 'w') as f:
+            f.write(str(val_config))
+
+        with open(f'{run_directory}/test_config.txt', 'w') as f:
+            f.write(str(test_config))
+
         solver.build()
-        solver.train()
+        solver.train(
+            run_directory=run_directory
+        )
         print('done')
 
         # to-do: ADD result tracking across multiple runs

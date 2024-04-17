@@ -2,11 +2,10 @@ import torch
 from torch.autograd import Variable
 
 
-def to_var(x, gpu_id=None, async=False):
+def to_var(x, gpu_id=None, is_async=False):
     """Tensor => Variable"""
     if torch.cuda.is_available():
-        x = x.cuda(gpu_id, async)
-        #x = Variable(x)
+        x = x.cuda(gpu_id, is_async)
     return x
 
 
@@ -16,17 +15,19 @@ def to_tensor(x):
         x = x.cpu()
     return x.data
 
+
 def flat_to_var(input):
     return to_var(torch.LongTensor([i for item in input for i in item]))
+
 
 def reverse_order(tensor, dim=0):
     """Reverse Tensor or Variable"""
     if isinstance(tensor, torch.Tensor) or isinstance(tensor, torch.LongTensor):
-        idx = [i for i in range(tensor.size(dim)-1, -1, -1)]
+        idx = [i for i in range(tensor.size(dim) - 1, -1, -1)]
         idx = torch.LongTensor(idx)
         inverted_tensor = tensor.index_select(dim, idx)
     if isinstance(tensor, torch.cuda.FloatTensor) or isinstance(tensor, torch.cuda.LongTensor):
-        idx = [i for i in range(tensor.size(dim)-1, -1, -1)]
+        idx = [i for i in range(tensor.size(dim) - 1, -1, -1)]
         idx = torch.cuda.LongTensor(idx)
         inverted_tensor = tensor.index_select(dim, idx)
         return inverted_tensor
@@ -34,6 +35,7 @@ def reverse_order(tensor, dim=0):
         variable = tensor
         variable.data = reverse_order(variable.data, dim)
         return variable
+
 
 def reverse_order_valid(tensor, length_list, dim=0):
     """

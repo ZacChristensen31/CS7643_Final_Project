@@ -15,6 +15,8 @@ import gensim
 from sklearn.metrics import classification_report
 from abc import ABC, abstractmethod
 import matplotlib.pyplot as plt
+import os
+from datetime import datetime
 
 
 class Model(ABC):
@@ -45,16 +47,19 @@ class Model(ABC):
 
     def load_model(self):
         print(f'Load parameters from {self.checkpoint}')
-        pretrained_dict = torch.load(self.checkpoint)
+        if torch.cuda.is_available():
+            pretrained_dict = torch.load(self.checkpoint)
+        else:
+            pretrained_dict = torch.load(self.checkpoint, map_location=torch.device('cpu'))
         model_dict = self.model.state_dict()
 
-        #filter out unnecessary keys
+        # filter out unnecessary keys
         filtered_pretrained_dict = {}
         for k, v in pretrained_dict.items():
             if (k in model_dict) and ("embedding" not in k) and ("context" in k) and ("ih" not in k):
                 filtered_pretrained_dict[k] = v
 
-        #overwrite entries in the existing state dict + load new state dict
+        # overwrite entries in the existing state dict + load new state dict
         model_dict.update(filtered_pretrained_dict)
         self.model.load_state_dict(model_dict)
 
@@ -77,26 +82,26 @@ class Model(ABC):
     def epoch_reset(self, epoch_i):
         """performance tracking -- could move this outside model """
 
-        #update end of epoch stats
-        if len(self.batch_loss_history)>0:
+        # update end of epoch stats
+        if len(self.batch_loss_history) > 0:
             curr_val_loss = np.mean(self.val_batch_loss_history)
             self.epoch_loss.append(np.mean(self.batch_loss_history))
             self.w_train_f1.append(self.print_metric(self.ground_truth, self.predictions, "train"))
             self.val_epoch_loss.append(curr_val_loss)
             self.w_valid_f1.append(self.print_metric(self.val_ground_truth, self.val_predictions, "train"))
 
-            if curr_val_loss<self.min_val_loss:
+            if curr_val_loss < self.min_val_loss:
                 self.min_val_loss = curr_val_loss
-                self.best_epoch = self.epoch_i+1     #from zero start
+                self.best_epoch = self.epoch_i + 1  # from zero start
                 self.patience = 0
             else:
-                self.patience+=1
+                self.patience += 1
 
-            #trigger early stopping
-            if self.patience>self.config.patience:
+            # trigger early stopping
+            if self.patience > self.config.patience:
                 self.done = True
 
-        #reset epoch trackers
+        # reset epoch trackers
         self.epoch_i = epoch_i
         self.batch_loss_history = []
         self.predictions = []
@@ -105,31 +110,57 @@ class Model(ABC):
         self.val_predictions = []
         self.val_ground_truth = []
 
-    def plot_results(self, typ='Loss'):
+    def plot_results(self, typ='Loss', image_directory=None, epoch_num=None):
         """save plots?"""
-        if typ=='Loss':
-            tr,val = self.epoch_loss, self.val_epoch_loss
-        elif typ=='F1':
-            tr,val = self.w_train_f1, self.w_valid_f1
+        if typ == 'Loss':
+            tr, val = self.epoch_loss, self.val_epoch_loss
+        elif typ == 'F1':
+            tr, val = self.w_train_f1, self.w_valid_f1
+        else:
+            print('Invalid Type')
+            return
+
         plt.plot(tr, label=f'Train{typ}')
         plt.plot(val, label=f'Valid{typ}')
         plt.title(f'{self.__name__} {typ} Curve')
         plt.xlabel('Epoch')
         plt.ylabel(typ)
         plt.legend()
-        plt.show()
+
+        if image_directory is not None:
+            image_name = f'{image_directory}/{typ}'
+
+            if epoch_num:
+                image_name += f'_{epoch_num}'
+
+            plt.savefig(f'{image_name}.png', format='png')
+
+        plt.clf()
+
+    def save_epoch_results(self, epoch_num, run_directory):
+        """save epoch results to file"""
+
+        file_path = f'{run_directory}/results.csv'
+
+        if not os.path.exists(file_path):
+            with open(file_path, 'w') as f:
+                f.write('epoch,train_loss,valid_loss,train_f1,valid_f1\n')
+
+        with open(f'{run_directory}/results.csv', 'a+') as f:
+            f.write(f'{epoch_num},{self.epoch_loss[-1]},{self.val_epoch_loss[-1]},{self.w_train_f1[-1]},{self.w_valid_f1[-1]}\n')
 
     @staticmethod
     def print_metric(y_true, y_pred, mode):
         if mode in ["train", "test"]:
             print(mode)
-            print(classification_report(y_true, y_pred, digits=4))
-        weighted_fscore = classification_report(y_true, y_pred, output_dict=True, digits=4)["weighted avg"]["f1-score"]
+            print(classification_report(y_true, y_pred, digits=4, zero_division=0.0))
+        weighted_fscore = \
+        classification_report(y_true, y_pred, output_dict=True, digits=4, zero_division=0.0)["weighted avg"]["f1-score"]
         return weighted_fscore
 
 
 class TextModel(Model):
-    __name__='TextModel'
+    __name__ = 'TextModel'
 
     def __init__(self, config):
         super().__init__(config)
@@ -164,7 +195,7 @@ class TextModel(Model):
         if self.checkpoint is not None:
             self.load_model()
 
-        #I removed "is_train" check here because seemed unused?
+        # I removed "is_train" check here because seemed unused?
         self.optimizer = self.config.optimizer(
             filter(lambda p: p.requires_grad, self.model.parameters()),
             lr=self.config.learning_rate)
@@ -177,7 +208,7 @@ class TextModel(Model):
         """ from TL-ERC """
         self.model.train()
 
-        #unpack, flatten, to cuda
+        # unpack, flatten, to cuda
         (conversations, labels, conversation_length, sentence_length, _, _, type_ids, masks) = data
         input_conversations = conversations
         orig_input_labels = [i for item in labels for i in item]
@@ -191,9 +222,9 @@ class TextModel(Model):
         # reset gradient
         self.optimizer.zero_grad()
         sentence_logits = self.model(input_sentences,
-                                    input_sentence_length,
-                                    input_conversation_length,
-                                    input_masks)
+                                     input_sentence_length,
+                                     input_conversation_length,
+                                     input_masks)
 
         present_predictions = list(np.argmax(sentence_logits.detach().cpu().numpy(), axis=1))
         loss_function = nn.CrossEntropyLoss()
@@ -210,8 +241,8 @@ class TextModel(Model):
 
     def evaluate(self, data):
         self.model.eval()
-        #unpack and flatten inputs
-        (conversations, labels, conversation_length, sentence_length, _,_, type_ids, masks)=data
+        # unpack and flatten inputs
+        (conversations, labels, conversation_length, sentence_length, _, _, type_ids, masks) = data
         input_conversations = conversations
         orig_input_labels = [i for item in labels for i in item]
 
@@ -238,7 +269,7 @@ class TextModel(Model):
 
 
 class AudioModel(Model):
-    __name__='AudioModel'
+    __name__ = 'AudioModel'
 
     def __init__(self, config):
         super().__init__(config)
@@ -262,7 +293,7 @@ class AudioModel(Model):
 
 
 class VisualModel(Model):
-    __name__='VisualModel'
+    __name__ = 'VisualModel'
 
     def __init__(self, config):
         super().__init__(config)
@@ -285,7 +316,8 @@ class VisualModel(Model):
 
 class CombinedModel(Model):
     """ runs concatenated features through same model rather than train separately"""
-    __name__='CombinedModel'
+    __name__ = 'CombinedModel'
+
     def __init__(self, config):
         super().__init__(config)
 
@@ -317,7 +349,7 @@ class Solver(object):
 
     def build(self):
         """initiate models for all modalities in config"""
-        if len(self.models)==0:
+        if len(self.models) == 0:
             for mod in self.config.modalities:
                 if mod == 'text':
                     self.models.append(TextModel(self.config))
@@ -335,7 +367,7 @@ class Solver(object):
                 model.build()
 
     # @time_desc_decorator('Training Start!')
-    def train(self):
+    def train(self, run_directory=None):
         """
         Don't love all this looping -- could theoretically trigger models in parallel
         but I don't have the compute for that.
@@ -344,27 +376,31 @@ class Solver(object):
         but thought managing them together like this might give us flexibility to
         combine more freely?
         """
+
+        # Set up image output directories
+        images = f'{run_directory}/images'
+
+        if not os.path.exists(images):
+            os.mkdir(images)
+
         for epoch_i in range(self.epoch_i, self.config.n_epoch):
             self.epoch_i = epoch_i
 
-            #run training for each model
+            # run training for each model
             for batch_i, data in enumerate(tqdm(self.train_data_loader, ncols=80)):
                 for model in self.models: model.train(data)
 
-            #run validation for each model
+            # run validation for each model
             for batch_i, data in enumerate(tqdm(self.valid_data_loader, ncols=80)):
                 for model in self.models: model.evaluate(data)
 
-            #not really supposed to be running your test set during training?
+            # not really supposed to be running your test set during training?
             # for batch_i, data in enumerate(tqdm(self.test_data_loader, ncols=80)):
             #     for model in self.models: model.evaluate(data)
 
-            #track results, plot update, reset trackers for new epoch
+            # track results, plot update, reset trackers for new epoch
             for model in self.models:
                 model.epoch_reset(epoch_i)
-                model.plot_results("Loss")
-                model.plot_results('F1')
-
-
-
-
+                model.plot_results("Loss", image_directory=images, epoch_num=epoch_i)
+                model.plot_results('F1', image_directory=images, epoch_num=epoch_i)
+                model.save_epoch_results(epoch_i, run_directory=run_directory)
