@@ -111,7 +111,7 @@ class Model(ABC):
         self.val_predictions = []
         self.val_ground_truth = []
 
-    def plot_results(self, typ='Loss', image_directory=None, epoch_num=None):
+    def plot_results(self, typ='Loss', image_directory=None, epoch_num=None, show_results=False, save_results=False):
         """save plots?"""
         if typ == 'Loss':
             tr, val = self.epoch_loss, self.val_epoch_loss
@@ -128,7 +128,7 @@ class Model(ABC):
         plt.ylabel(typ)
         plt.legend()
 
-        if image_directory is not None:
+        if save_results and image_directory is not None:
             image_name = f'{image_directory}/{typ}'
 
             if epoch_num:
@@ -136,7 +136,10 @@ class Model(ABC):
 
             plt.savefig(f'{image_name}.png', format='png')
 
-        plt.clf()
+        if show_results:
+            plt.show()
+        else:
+            plt.clf()
 
     def save_epoch_results(self, epoch_num, run_directory):
         """save epoch results to file"""
@@ -402,6 +405,6 @@ class Solver(object):
             # track results, plot update, reset trackers for new epoch
             for model in self.models:
                 model.epoch_reset(epoch_i)
-                model.plot_results("Loss", image_directory=images, epoch_num=epoch_i)
-                model.plot_results('F1', image_directory=images, epoch_num=epoch_i)
+                model.plot_results("Loss", image_directory=images, epoch_num=epoch_i, save_results=True)
+                model.plot_results('F1', image_directory=images, epoch_num=epoch_i, save_results=True)
                 model.save_epoch_results(epoch_i, run_directory=run_directory)

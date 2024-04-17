@@ -88,8 +88,8 @@ if __name__ == '__main__':
             run_directory=run_directory
         )
         for model in solver.models:
-            model.plot_results("Loss")
-            model.plot_results('F1')
+            model.plot_results("Loss", show_results=True)
+            model.plot_results('F1', show_results=True)
         print('done')
 
         # to-do: ADD result tracking across multiple runs
