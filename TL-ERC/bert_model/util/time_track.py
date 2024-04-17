@@ -49,6 +49,7 @@ def check_done(func):
             return func(self, *args, **kwargs)
         else:
             print(f"{self.__name__} training complete")
+            return None
     return wrapper
 
 if __name__ == '__main__':

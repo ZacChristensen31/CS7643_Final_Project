@@ -47,10 +47,7 @@ class Model(ABC):
 
     def load_model(self):
         print(f'Load parameters from {self.checkpoint}')
-        if torch.cuda.is_available():
-            pretrained_dict = torch.load(self.checkpoint)
-        else:
-            pretrained_dict = torch.load(self.checkpoint, map_location=torch.device('cpu'))
+        pretrained_dict = torch.load(self.checkpoint, map_location=torch.device(self.model.device))
         model_dict = self.model.state_dict()
 
         # filter out unnecessary keys
@@ -88,7 +85,7 @@ class Model(ABC):
             self.epoch_loss.append(np.mean(self.batch_loss_history))
             self.w_train_f1.append(self.print_metric(self.ground_truth, self.predictions, "train"))
             self.val_epoch_loss.append(curr_val_loss)
-            self.w_valid_f1.append(self.print_metric(self.val_ground_truth, self.val_predictions, "train"))
+            self.w_valid_f1.append(self.print_metric(self.val_ground_truth, self.val_predictions, "valid"))
 
             if curr_val_loss < self.min_val_loss:
                 self.min_val_loss = curr_val_loss
@@ -101,7 +98,11 @@ class Model(ABC):
             if self.patience > self.config.patience:
                 self.done = True
 
-        # reset epoch trackers
+            print(f"{self.__name__} Epoch {self.epoch_i}")
+            print(f"BEST EPOCH {self.best_epoch} ")
+            print(f"LOSS: {self.min_val_loss}, F1: {np.max(self.w_valid_f1)}")
+
+        #reset epoch trackers
         self.epoch_i = epoch_i
         self.batch_loss_history = []
         self.predictions = []
@@ -151,7 +152,7 @@ class Model(ABC):
 
     @staticmethod
     def print_metric(y_true, y_pred, mode):
-        if mode in ["train", "test"]:
+        if mode in ["train", "test", "valid"]:
             print(mode)
             print(classification_report(y_true, y_pred, digits=4, zero_division=0.0))
         weighted_fscore = \

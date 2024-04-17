@@ -24,7 +24,6 @@ if __name__ == '__main__':
     for run in range(_RUNS):
 
         print(config)
-
         # No. of videos to consider
         training_data_len = int(config.training_percentage * \
             len(load_pickle(config.sentences_path)))
@@ -88,6 +87,9 @@ if __name__ == '__main__':
         solver.train(
             run_directory=run_directory
         )
+        for model in solver.models:
+            model.plot_results("Loss")
+            model.plot_results('F1')
         print('done')
 
         # to-do: ADD result tracking across multiple runs
