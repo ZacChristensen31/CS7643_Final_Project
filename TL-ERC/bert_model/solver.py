@@ -12,11 +12,12 @@ import re
 import math
 import pickle
 import gensim
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, confusion_matrix
 from abc import ABC, abstractmethod
 import matplotlib.pyplot as plt
 import os
 from datetime import datetime
+import pandas as pd
 
 
 class Model(ABC):
@@ -75,6 +76,8 @@ class Model(ABC):
         self.ground_truth = []
         self.val_predictions = []
         self.val_ground_truth = []
+        self.train_report = []
+        self.val_report = []
 
     def epoch_reset(self, epoch_i):
         """performance tracking -- could move this outside model """
@@ -82,10 +85,14 @@ class Model(ABC):
         # update end of epoch stats
         if len(self.batch_loss_history) > 0:
             curr_val_loss = np.mean(self.val_batch_loss_history)
+            tr_f1, tr_report = self.print_metric(self.ground_truth, self.predictions, "train")
+            val_f1, val_report = self.print_metric(self.val_ground_truth, self.val_predictions, "valid")
             self.epoch_loss.append(np.mean(self.batch_loss_history))
-            self.w_train_f1.append(self.print_metric(self.ground_truth, self.predictions, "train"))
+            self.w_train_f1.append(tr_f1)
+            self.w_valid_f1.append(val_f1)
+            self.train_report.append(tr_report)
+            self.val_report.append(val_report)
             self.val_epoch_loss.append(curr_val_loss)
-            self.w_valid_f1.append(self.print_metric(self.val_ground_truth, self.val_predictions, "valid"))
 
             if curr_val_loss < self.min_val_loss:
                 self.min_val_loss = curr_val_loss
@@ -145,22 +152,34 @@ class Model(ABC):
         """save epoch results to file"""
 
         file_path = f'{run_directory}/results.csv'
+        report_path = f'{run_directory}/class_report.csv'
+
+        # construct class level report dataframe
+        mode, header = 'a', False
+        val_report = pd.DataFrame(self.val_report[-1]).T
+        tr_report = pd.DataFrame(self.train_report[-1]).T
+        report = val_report.join(tr_report, rsuffix='_Train')
+        report.index = pd.MultiIndex.from_product([[epoch_num],report.index],
+                                                  names=['Epoch','Class'])
 
         if not os.path.exists(file_path):
             with open(file_path, 'w') as f:
                 f.write('epoch,train_loss,valid_loss,train_f1,valid_f1\n')
+            mode, header = 'w', True
 
         with open(f'{run_directory}/results.csv', 'a+') as f:
             f.write(f'{epoch_num},{self.epoch_loss[-1]},{self.val_epoch_loss[-1]},{self.w_train_f1[-1]},{self.w_valid_f1[-1]}\n')
+
+        report.to_csv(report_path,mode=mode,header=header)
+
 
     @staticmethod
     def print_metric(y_true, y_pred, mode):
         if mode in ["train", "test", "valid"]:
             print(mode)
             print(classification_report(y_true, y_pred, digits=4, zero_division=0.0))
-        weighted_fscore = \
-        classification_report(y_true, y_pred, output_dict=True, digits=4, zero_division=0.0)["weighted avg"]["f1-score"]
-        return weighted_fscore
+        report = classification_report(y_true, y_pred, output_dict=True, digits=4, zero_division=0.0)
+        return report["weighted avg"]["f1-score"], report
 
 
 class TextModel(Model):
