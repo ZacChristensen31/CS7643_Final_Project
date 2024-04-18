@@ -55,6 +55,7 @@ class Config(object):
         self.sentence_length_path = self.data_dir.joinpath('sentence_length.pkl')
         self.conversation_length_path = self.data_dir.joinpath('conversation_length.pkl')
         self.audio_path = self.data_dir.joinpath('audio.pkl')
+        self.audio_wav2vec_path = self.data_dir.joinpath('audio_wav2vec.pkl')
         self.visual_path = self.data_dir.joinpath('visuals.pkl')
 
     def __str__(self):
@@ -83,7 +84,7 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--num_classes', type=int, default=0) 
     parser.add_argument('--batch_size', type=int, default=2)        #really small?
     parser.add_argument('--eval_batch_size', type=int, default=2)   #really small?
-    parser.add_argument('--n_epoch', type=int, default=30)          #Usually stops early @ ~15-20
+    parser.add_argument('--n_epoch', type=int, default=20)          #Usually stops early @ ~15-20
     parser.add_argument('--patience', type=int, default=5)          #lowered from 10 for efficiency during testing
     parser.add_argument('--minimum_improvement', type=int, default=0.001)
     parser.add_argument('--learning_rate', type=float, default=1e-4)

@@ -186,7 +186,9 @@ class TextModel(Model):
     __name__ = 'TextModel'
 
     def __init__(self, config):
+
         super().__init__(config)
+        self.loss_func = nn.CrossEntropyLoss()
 
     def build(self):
         """from TL-ERC"""
@@ -231,8 +233,8 @@ class TextModel(Model):
         """ from TL-ERC """
         self.model.train()
 
-        # unpack, flatten, to cuda
-        (conversations, labels, conversation_length, sentence_length, _, _, type_ids, masks) = data
+        #unpack, flatten, to cuda
+        (conversations, labels, conversation_length, sentence_length, _,_,_,type_ids, masks) = data
         input_conversations = conversations
         orig_input_labels = [i for item in labels for i in item]
 
@@ -250,8 +252,7 @@ class TextModel(Model):
                                      input_masks)
 
         present_predictions = list(np.argmax(sentence_logits.detach().cpu().numpy(), axis=1))
-        loss_function = nn.CrossEntropyLoss()
-        batch_loss = loss_function(sentence_logits, input_labels)
+        batch_loss = self.loss_func(sentence_logits, input_labels)
         self.predictions += present_predictions
         self.ground_truth += orig_input_labels
         assert not isnan(batch_loss.item())
@@ -264,13 +265,13 @@ class TextModel(Model):
 
     def evaluate(self, data):
         self.model.eval()
+
         # unpack and flatten inputs
-        (conversations, labels, conversation_length, sentence_length, _, _, type_ids, masks) = data
+        (conversations, labels, conversation_length, sentence_length, _, _, _, type_ids, masks) = data
         input_conversations = conversations
-        orig_input_labels = [i for item in labels for i in item]
 
         with torch.no_grad():
-            input_sentences = flat_to_var(input_conversations)
+            input_sentences = flat_to_var(conversations)
             input_labels = flat_to_var(labels)
             input_sentence_length = flat_to_var(sentence_length)
             input_conversation_length = to_var(torch.LongTensor([l for l in conversation_length]))
@@ -282,8 +283,7 @@ class TextModel(Model):
                                      input_masks)
 
         present_predictions = list(np.argmax(sentence_logits.detach().cpu().numpy(), axis=1))
-        loss_function = nn.CrossEntropyLoss()
-        batch_loss = loss_function(sentence_logits, input_labels)
+        batch_loss = self.loss_func(sentence_logits, input_labels)
 
         self.val_predictions += present_predictions
         self.val_ground_truth += orig_input_labels
