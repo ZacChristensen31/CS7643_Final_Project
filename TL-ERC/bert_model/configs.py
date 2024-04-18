@@ -126,6 +126,7 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--print_every', type=int, default=100)
     parser.add_argument('--plot_every_epoch', type=int, default=1)
     parser.add_argument('--save_every_epoch', type=int, default=1)
+    parser.add_argument('--run_name', type=str, default=None)
 
     # Data
     parser.add_argument('--data', type=str, default='iemocap')

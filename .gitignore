@@ -1,9 +1,9 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
 
-# C extensions
+TL-ERC/datasets/iemocap/test/
+
+TL-ERC/datasets/iemocap/train/
+
+TL-ERC/datasets/iemocap/valid/
 *.so
 
 # Distribution / packaging

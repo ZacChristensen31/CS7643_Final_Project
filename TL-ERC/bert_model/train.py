@@ -13,9 +13,9 @@ def load_pickle(path):
 
 
 if __name__ == '__main__':
-    config = get_config(mode='train',data='iemocap',parse=False)
-    val_config = get_config(mode='valid',data='iemocap',parse=False)
-    test_config = get_config(mode='test',data='iemocap',parse=False)
+    config = get_config(mode='train',data='iemocap',parse=False,text_checkpoint=None,run_name='Test')
+    val_config = get_config(mode='valid',data='iemocap',parse=False,text_checkpoint=None)
+    test_config = get_config(mode='test',data='iemocap',parse=False,text_checkpoint=None,)
 
     _RUNS = 1
 
@@ -62,13 +62,15 @@ if __name__ == '__main__':
                         eval_data_loader, test_data_loader, is_train=True)
 
         outputs = '../run_outputs'
+        if config.run_name is not None:
+            outputs += f"/{config.run_name}/"
 
         if not os.path.exists(outputs):
             os.makedirs(outputs)
 
+        #append seed/run number
         run_timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-
-        run_directory = f'{outputs}/{run_timestamp}'
+        run_directory = f'{outputs}/{run_timestamp}_Run{run}'
 
         if not os.path.exists(run_directory):
             os.makedirs(run_directory)
