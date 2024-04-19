@@ -16,6 +16,7 @@ class bc_RNN(nn.Module):
 
         self.config = config
         self.encoder = BertModel.from_pretrained("bert-base-uncased")
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         context_input_size = (config.num_layers
                               * config.encoder_hidden_size)
@@ -76,7 +77,7 @@ class bc_RNN(nn.Module):
                                         input_conversation_length[:-1])), 0)
 
         # encoder_hidden: [batch_size, max_len, num_layers * direction * hidden_size]
-        encoder_hidden = torch.stack([pad(encoder_hidden.narrow(0, s, l), max_len)
+        encoder_hidden = torch.stack([pad(encoder_hidden.narrow(0, s, l), max_len, self.device)
                                       for s, l in zip(start.data.tolist(),
                                                       input_conversation_length.data.tolist())], 0)
 
@@ -85,7 +86,7 @@ class bc_RNN(nn.Module):
                                                                     input_conversation_length)
 
 
-        # flatten outputs
+        # flatten images
         # context_outputs: [num_sentences, context_size]
         context_outputs = torch.cat([context_outputs[i, :l, :]
                                      for i, l in enumerate(input_conversation_length.data)])

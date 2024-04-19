@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 import models
-from util import to_var, time_desc_decorator
+from util import to_var, time_desc_decorator, flat_to_var, check_done
 import os
 from tqdm import tqdm
 from math import isnan
@@ -12,31 +12,191 @@ import re
 import math
 import pickle
 import gensim
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, confusion_matrix
+from abc import ABC, abstractmethod
+import matplotlib.pyplot as plt
+import os
+from datetime import datetime
+import pandas as pd
 
 
-class Solver(object):
-    def __init__(self, config, train_data_loader, valid_data_loader, test_data_loader, is_train=True, model=None):
+class Model(ABC):
 
+    def __init__(self, config):
         self.config = config
+        self.model = None
+        self.done = False
+        self.result_reset()
+
+    @abstractmethod
+    def build(self):
+        pass
+
+    @abstractmethod
+    @check_done
+    def train(self, data):
+        pass
+
+    @abstractmethod
+    @check_done
+    def evaluate(self, data):
+        pass
+
+    @abstractmethod
+    def checkpoint(self, data):
+        pass
+
+    def load_model(self):
+        print(f'Load parameters from {self.checkpoint}')
+        pretrained_dict = torch.load(self.checkpoint, map_location=torch.device(self.model.device))
+        model_dict = self.model.state_dict()
+
+        # filter out unnecessary keys
+        filtered_pretrained_dict = {}
+        for k, v in pretrained_dict.items():
+            if (k in model_dict) and ("embedding" not in k) and ("context" in k) and ("ih" not in k):
+                filtered_pretrained_dict[k] = v
+
+        # overwrite entries in the existing state dict + load new state dict
+        model_dict.update(filtered_pretrained_dict)
+        self.model.load_state_dict(model_dict)
+
+    def result_reset(self):
+        self.min_val_loss = np.inf
+        self.patience = 0
         self.epoch_i = 0
-        self.train_data_loader = train_data_loader
-        self.valid_data_loader = valid_data_loader
-        self.test_data_loader = test_data_loader
-        self.is_train = is_train
-        self.model = model
+        self.best_epoch = -1
+        self.epoch_loss = []
+        self.val_epoch_loss = []
+        self.w_train_f1 = []
+        self.w_valid_f1 = []
+        self.batch_loss_history = []
+        self.val_batch_loss_history = []
+        self.predictions = []
+        self.ground_truth = []
+        self.val_predictions = []
+        self.val_ground_truth = []
+        self.train_report = []
+        self.val_report = []
 
-    @time_desc_decorator('Build Graph')
-    def build(self, cuda=True):
+    def epoch_reset(self, epoch_i):
+        """performance tracking -- could move this outside model """
 
+        # update end of epoch stats
+        if len(self.batch_loss_history) > 0:
+            curr_val_loss = np.mean(self.val_batch_loss_history)
+            tr_f1, tr_report = self.print_metric(self.ground_truth, self.predictions, "train")
+            val_f1, val_report = self.print_metric(self.val_ground_truth, self.val_predictions, "valid")
+            self.epoch_loss.append(np.mean(self.batch_loss_history))
+            self.w_train_f1.append(tr_f1)
+            self.w_valid_f1.append(val_f1)
+            self.train_report.append(tr_report)
+            self.val_report.append(val_report)
+            self.val_epoch_loss.append(curr_val_loss)
+
+            if curr_val_loss < self.min_val_loss:
+                self.min_val_loss = curr_val_loss
+                self.best_epoch = self.epoch_i + 1  # from zero start
+                self.patience = 0
+            else:
+                self.patience += 1
+
+            # trigger early stopping
+            if self.patience > self.config.patience:
+                self.done = True
+
+            print(f"{self.__name__} Epoch {self.epoch_i}")
+            print(f"BEST EPOCH {self.best_epoch} ")
+            print(f"LOSS: {self.min_val_loss}, F1: {np.max(self.w_valid_f1)}")
+
+        #reset epoch trackers
+        self.epoch_i = epoch_i
+        self.batch_loss_history = []
+        self.predictions = []
+        self.ground_truth = []
+        self.val_batch_loss_history = []
+        self.val_predictions = []
+        self.val_ground_truth = []
+
+    def plot_results(self, typ='Loss', image_directory=None, epoch_num=None, show_results=False, save_results=False):
+        """save plots?"""
+        if typ == 'Loss':
+            tr, val = self.epoch_loss, self.val_epoch_loss
+        elif typ == 'F1':
+            tr, val = self.w_train_f1, self.w_valid_f1
+        else:
+            print('Invalid Type')
+            return
+
+        plt.plot(tr, label=f'Train{typ}')
+        plt.plot(val, label=f'Valid{typ}')
+        plt.title(f'{self.__name__} {typ} Curve')
+        plt.xlabel('Epoch')
+        plt.ylabel(typ)
+        plt.legend()
+
+        if save_results and image_directory is not None:
+            image_name = f'{image_directory}/{typ}'
+
+            if epoch_num:
+                image_name += f'_{epoch_num}'
+
+            plt.savefig(f'{image_name}.png', format='png')
+
+        if show_results:
+            plt.show()
+        else:
+            plt.clf()
+
+    def save_epoch_results(self, epoch_num, run_directory):
+        """save epoch results to file"""
+
+        file_path = f'{run_directory}/results.csv'
+        report_path = f'{run_directory}/class_report.csv'
+
+        # construct class level report dataframe
+        mode, header = 'a', False
+        val_report = pd.DataFrame(self.val_report[-1]).T
+        tr_report = pd.DataFrame(self.train_report[-1]).T
+        report = val_report.join(tr_report, rsuffix='_Train')
+        report.index = pd.MultiIndex.from_product([[epoch_num],report.index],
+                                                  names=['Epoch','Class'])
+
+        if not os.path.exists(file_path):
+            with open(file_path, 'w') as f:
+                f.write('epoch,train_loss,valid_loss,train_f1,valid_f1\n')
+            mode, header = 'w', True
+
+        with open(f'{run_directory}/results.csv', 'a+') as f:
+            f.write(f'{epoch_num},{self.epoch_loss[-1]},{self.val_epoch_loss[-1]},{self.w_train_f1[-1]},{self.w_valid_f1[-1]}\n')
+
+        report.to_csv(report_path,mode=mode,header=header)
+
+
+    @staticmethod
+    def print_metric(y_true, y_pred, mode):
+        if mode in ["train", "test", "valid"]:
+            print(mode)
+            print(classification_report(y_true, y_pred, digits=4, zero_division=0.0))
+        report = classification_report(y_true, y_pred, output_dict=True, digits=4, zero_division=0.0)
+        return report["weighted avg"]["f1-score"], report
+
+
+class TextModel(Model):
+    __name__ = 'TextModel'
+
+    def __init__(self, config):
+
+        super().__init__(config)
+        self.loss_func = nn.CrossEntropyLoss()
+
+    def build(self):
+        """from TL-ERC"""
         if self.model is None:
+            self.model = getattr(models, self.config.text_model)(self.config)
 
-            self.model = getattr(models, self.config.model)(self.config)
-
-            # orthogonal initialiation for hidden weights
-            # input gate bias for GRUs
-            if self.config.mode == 'train' and self.config.checkpoint is None:
-
+            # orthogonal initialiation for hidden weights, input gate bias for GRUs
+            if self.config.mode == 'train' and self.config.text_checkpoint is None:
                 # Make later layers require_grad = False
                 for name, param in self.model.named_parameters():
                     if "encoder.encoder.layer" in name:
@@ -44,235 +204,227 @@ class Solver(object):
                         if layer_num >= (self.config.num_bert_layers):
                             param.requires_grad = False
 
-
-                print('Parameter initiailization')
-                for name, param in self.model.named_parameters(): 
+                print('Parameter initialization')
+                for name, param in self.model.named_parameters():
                     if ('weight_hh' in name) and ("encoder.encoder" not in name):
-                        print('\t' + name)
                         nn.init.orthogonal_(param)
 
-                # Final list
-                for name, param in self.model.named_parameters():
-                    print('\t' + name, param.requires_grad)
-
-
-        if torch.cuda.is_available() and cuda:
+        if torch.cuda.is_available():
             self.model.cuda()
 
         # Overview Parameters
-        print('Model Parameters')
+        print('Text Model Parameters')
         for name, param in self.model.named_parameters():
             print('\t' + name + '\t', list(param.size()))
 
-        if self.config.load_checkpoint:
-            self.load_model(self.config.load_checkpoint)
+        if self.checkpoint is not None:
+            self.load_model()
 
-        if self.is_train:
-            self.optimizer = self.config.optimizer(
-                filter(lambda p: p.requires_grad, self.model.parameters()),
-                lr=self.config.learning_rate)
+        # I removed "is_train" check here because seemed unused?
+        self.optimizer = self.config.optimizer(
+            filter(lambda p: p.requires_grad, self.model.parameters()),
+            lr=self.config.learning_rate)
+
+    @property
+    def checkpoint(self):
+        return self.config.text_checkpoint
+
+    def train(self, data):
+        """ from TL-ERC """
+        self.model.train()
+
+        #unpack, flatten, to cuda
+        (conversations, labels, conversation_length, sentence_length, _,_,_,type_ids, masks) = data
+        input_conversations = conversations
+        orig_input_labels = [i for item in labels for i in item]
+
+        input_sentences = flat_to_var(input_conversations)
+        input_labels = flat_to_var(labels)
+        input_sentence_length = flat_to_var(sentence_length)
+        input_conversation_length = to_var(torch.LongTensor([l for l in conversation_length]))
+        input_masks = flat_to_var(masks)
+
+        # reset gradient
+        self.optimizer.zero_grad()
+        sentence_logits = self.model(input_sentences,
+                                     input_sentence_length,
+                                     input_conversation_length,
+                                     input_masks)
+
+        present_predictions = list(np.argmax(sentence_logits.detach().cpu().numpy(), axis=1))
+        batch_loss = self.loss_func(sentence_logits, input_labels)
+        self.predictions += present_predictions
+        self.ground_truth += orig_input_labels
+        assert not isnan(batch_loss.item())
+        self.batch_loss_history.append(batch_loss.item())
+
+        # Back-prop, clip, step
+        batch_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.clip)
+        self.optimizer.step()
+
+    def evaluate(self, data):
+        self.model.eval()
+
+        # unpack and flatten inputs
+        (conversations, labels, conversation_length, sentence_length, _, _, _, type_ids, masks) = data
+        input_conversations = conversations
+        orig_input_labels = [i for item in labels for i in item]
+
+        with torch.no_grad():
+            input_sentences = flat_to_var(conversations)
+            input_labels = flat_to_var(labels)
+            input_sentence_length = flat_to_var(sentence_length)
+            input_conversation_length = to_var(torch.LongTensor([l for l in conversation_length]))
+            input_masks = flat_to_var(masks)
+
+        sentence_logits = self.model(input_sentences,
+                                     input_sentence_length,
+                                     input_conversation_length,
+                                     input_masks)
+
+        present_predictions = list(np.argmax(sentence_logits.detach().cpu().numpy(), axis=1))
+        batch_loss = self.loss_func(sentence_logits, input_labels)
+
+        self.val_predictions += present_predictions
+        self.val_ground_truth += orig_input_labels
+        assert not isnan(batch_loss.item())
+        self.val_batch_loss_history.append(batch_loss.item())
 
 
-    def load_model(self, checkpoint):
-        """Load parameters from checkpoint"""
-        print(f'Load parameters from {checkpoint}')
+class AudioModel(Model):
+    __name__ = 'AudioModel'
 
-        pretrained_dict = torch.load(checkpoint)
-        model_dict =self.model.state_dict()
+    def __init__(self, config):
+        super().__init__(config)
 
-        # 1. filter out unnecessary keys
-        filtered_pretrained_dict = {}
-        for k, v in pretrained_dict.items():
-            if (k in model_dict) and ("embedding" not in k) and ("context" in k) and ("ih" not in k):
-                filtered_pretrained_dict[k]=v
+    def build(self):
+        pass
 
-        print(f"Filtered pretrained dict: {filtered_pretrained_dict.keys()}")
+    def train(self, data):
+        if self.done:
+            pass
+        self.model.train()
+        pass
 
-        # 2. overwrite entries in the existing state dict
-        model_dict.update(filtered_pretrained_dict)
+    def evaluate(self, data):
+        self.model.eval()
+        pass
 
-        # 3. load the new state dict
-        self.model.load_state_dict(model_dict)
+    @property
+    def checkpoint(self):
+        return self.config.audio_checkpoint
 
 
-    @time_desc_decorator('Training Start!')
-    def train(self):
-        min_val_loss = np.inf
-        patience_counter=0
-        best_epoch = -1
-        
+class VisualModel(Model):
+    __name__ = 'VisualModel'
+
+    def __init__(self, config):
+        super().__init__(config)
+
+    def build(self):
+        pass
+
+    def train(self, data):
+        self.model.train()
+        pass
+
+    def evaluate(self, data):
+        self.model.eval()
+        pass
+
+    @property
+    def checkpoint(self):
+        return self.config.visual_checkpoint
+
+
+class CombinedModel(Model):
+    """ runs concatenated features through same model rather than train separately"""
+    __name__ = 'CombinedModel'
+
+    def __init__(self, config):
+        super().__init__(config)
+
+    def build(self):
+        pass
+
+    def train(self, data):
+        self.model.train()
+        pass
+
+    def evaluate(self, data):
+        self.model.eval()
+        pass
+
+    @property
+    def checkpoint(self):
+        return self.config.combined_checkpoint
+
+
+class Solver(object):
+    def __init__(self, config, train_data_loader, valid_data_loader, test_data_loader, is_train=True, models=[]):
+        self.config = config
+        self.epoch_i = 0
+        self.train_data_loader = train_data_loader
+        self.valid_data_loader = valid_data_loader
+        self.test_data_loader = test_data_loader
+        self.is_train = is_train
+        self.models = models
+
+    def build(self):
+        """initiate models for all modalities in config"""
+        if len(self.models) == 0:
+            for mod in self.config.modalities:
+                if mod == 'text':
+                    self.models.append(TextModel(self.config))
+                elif mod == 'audio':
+                    print("Audio model not implemented yet -- setting empty")
+                    self.models.append(AudioModel(self.config))
+                elif mod == 'visual':
+                    print("Visual model not implemented yet -- setting empty")
+                    self.models.append(VisualModel(self.config))
+                elif mod == 'combined':
+                    print("Combined model not implemented yet -- setting empty")
+                    self.models.append(CombinedModel(self.config))
+
+            for model in self.models:
+                model.build()
+
+    # @time_desc_decorator('Training Start!')
+    def train(self, run_directory=None):
+        """
+        Don't love all this looping -- could theoretically trigger models in parallel
+        but I don't have the compute for that.
+
+        Alternatively, init each model with a loader and execute training separately,
+        but thought managing them together like this might give us flexibility to
+        combine more freely?
+        """
+
+        # Set up image output directories
+        images = f'{run_directory}/images'
+
+        if not os.path.exists(images):
+            os.mkdir(images)
+
         for epoch_i in range(self.epoch_i, self.config.n_epoch):
             self.epoch_i = epoch_i
 
-            batch_loss_history = []
-            predictions, ground_truth = [], []
-            self.model.train()
-            n_total_words = 0
-            before_gradient = None
+            # run training for each model
+            for batch_i, data in enumerate(tqdm(self.train_data_loader, ncols=80)):
+                for model in self.models: model.train(data)
 
-            for batch_i, (conversations, labels, conversation_length, sentence_length, type_ids, masks) in enumerate(tqdm(self.train_data_loader, ncols=80)):
-                # conversations: (batch_size) list of conversations
-                #   conversation: list of sentences
-                #   sentence: list of tokens
-                # conversation_length: list of int
-                # sentence_length: (batch_size) list of conversation list of sentence_lengths
+            # run validation for each model
+            for batch_i, data in enumerate(tqdm(self.valid_data_loader, ncols=80)):
+                for model in self.models: model.evaluate(data)
 
-                input_conversations = conversations
+            # not really supposed to be running your test set during training?
+            # for batch_i, data in enumerate(tqdm(self.test_data_loader, ncols=80)):
+            #     for model in self.models: model.evaluate(data)
 
-                # flatten input and target conversations
-                input_sentences = [sent for conv in input_conversations for sent in conv]
-                input_labels = [label for utt in labels for label in utt]
-                input_sentence_length = [l for len_list in sentence_length for l in len_list]
-                input_conversation_length = [l for l in conversation_length]
-                input_masks = [mask for conv in masks for mask in conv]
-                orig_input_labels = input_labels
-
-                # transfering the input to cuda
-                input_sentences = to_var(torch.LongTensor(input_sentences))
-                input_labels = to_var(torch.LongTensor(input_labels))
-                input_sentence_length = to_var(torch.LongTensor(input_sentence_length))
-                input_conversation_length = to_var(torch.LongTensor(input_conversation_length))
-                input_masks = to_var(torch.LongTensor(input_masks))
-
-                # reset gradient
-                self.optimizer.zero_grad()
-
-                sentence_logits = self.model(
-                    input_sentences,
-                    input_sentence_length,
-                    input_conversation_length,
-                    input_masks)
-
-                present_predictions = list(np.argmax(sentence_logits.detach().cpu().numpy(), axis=1))
-
-                loss_function = nn.CrossEntropyLoss()
-                batch_loss = loss_function(sentence_logits, input_labels)
-
-                predictions += present_predictions
-                ground_truth += orig_input_labels
-
-                assert not isnan(batch_loss.item())
-                batch_loss_history.append(batch_loss.item())
-
-                if batch_i % self.config.print_every == 0:
-                    tqdm.write(
-                        f'Epoch: {epoch_i+1}, iter {batch_i}: loss = {batch_loss.item()}')
-
-                # Back-propagation
-                batch_loss.backward()
-
-                # Gradient cliping
-                torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(), self.config.clip)
-
-                # Run optimizer
-                self.optimizer.step()
-
-
-            epoch_loss = np.mean(batch_loss_history)
-            self.epoch_loss = epoch_loss
-
-            print_str = f'Epoch {epoch_i+1} loss average: {epoch_loss:.3f}'
-            print(print_str)
-            
-            self.w_train_f1 = self.print_metric(ground_truth, predictions, "train")
-
-
-            self.validation_loss, self.w_valid_f1, valid_predictions = self.evaluate(self.valid_data_loader, mode="valid")
-            self.test_loss, self.w_test_f1, test_predictions = self.evaluate(self.test_data_loader, mode="test")
-
-            print(self.epoch_loss, self.w_train_f1, self.w_valid_f1, self.w_test_f1)
-
-            IMPROVED = False
-            if self.validation_loss < min_val_loss:
-                IMPROVED = True
-                min_val_loss = self.validation_loss
-                best_test_loss = self.test_loss
-                best_test_f1_w = self.w_test_f1
-                best_epoch = (self.epoch_i+1)
-
-            if (not IMPROVED):
-                patience_counter+=1
-            else:
-                patience_counter = 0
-            print(f'Patience counter: {patience_counter}')
-            if (patience_counter > self.config.patience):
-                break
-
-
-        return best_test_loss, best_test_f1_w, best_epoch
-
-
-
-    def evaluate(self, data_loader, mode=None):
-        assert(mode is not None)
-
-        self.model.eval()
-        batch_loss_history, predictions, ground_truth = [], [], []
-        for batch_i, (conversations, labels, conversation_length, sentence_length, type_ids, masks) in enumerate(data_loader):
-            # conversations: (batch_size) list of conversations
-            #   conversation: list of sentences
-            #   sentence: list of tokens
-            # conversation_length: list of int
-            # sentence_length: (batch_size) list of conversation list of sentence_lengths
-
-            input_conversations = conversations
-
-            # flatten input and target conversations
-            input_sentences = [sent for conv in input_conversations for sent in conv]
-            input_labels = [label for conv in labels for label in conv]
-            input_sentence_length = [l for len_list in sentence_length for l in len_list]
-            input_conversation_length = [l for l in conversation_length]
-            input_masks = [mask for conv in masks for mask in conv]
-            orig_input_labels = input_labels
-
-            with torch.no_grad():
-                # transfering the input to cuda
-                input_sentences = to_var(torch.LongTensor(input_sentences))
-                input_labels = to_var(torch.LongTensor(input_labels))
-                input_sentence_length = to_var(torch.LongTensor(input_sentence_length))
-                input_conversation_length = to_var(torch.LongTensor(input_conversation_length))
-                input_masks = to_var(torch.LongTensor(input_masks))
-
-            sentence_logits = self.model(
-                input_sentences,
-                input_sentence_length,
-                input_conversation_length,
-                input_masks)
-
-            present_predictions = list(np.argmax(sentence_logits.detach().cpu().numpy(), axis=1))
-            
-            loss_function = nn.CrossEntropyLoss()
-            batch_loss = loss_function(sentence_logits, input_labels)
-
-            predictions += present_predictions
-            ground_truth += orig_input_labels
-
-            assert not isnan(batch_loss.item())
-            batch_loss_history.append(batch_loss.item())
-
-        epoch_loss = np.mean(batch_loss_history)
-
-        print_str = f'{mode} loss: {epoch_loss:.3f}\n'
-
-        w_f1_score = self.print_metric(ground_truth, predictions, mode)
-        return epoch_loss, w_f1_score, predictions
-    
-
-    
-    def print_metric(self, y_true, y_pred, mode):
-
-        if mode in ["train", "test"]:
-            print(mode)
-            if (self.config.data == "dailydialog"):
-                print(classification_report(y_true, y_pred, labels=[1,2,3,4,5,6], digits=4))
-            else:
-                print(classification_report(y_true, y_pred, digits=4))
-        
-
-        if (self.config.data == "dailydialog"):
-            weighted_fscore = classification_report(y_true, y_pred, labels=[1,2,3,4,5,6], output_dict=True, digits=4)["weighted avg"]["f1-score"]
-        else:
-            weighted_fscore = classification_report(y_true, y_pred, output_dict=True, digits=4)["weighted avg"]["f1-score"]
-
-        return weighted_fscore
+            # track results, plot update, reset trackers for new epoch
+            for model in self.models:
+                model.epoch_reset(epoch_i)
+                model.plot_results("Loss", image_directory=images, epoch_num=epoch_i, save_results=True)
+                model.plot_results('F1', image_directory=images, epoch_num=epoch_i, save_results=True)
+                model.save_epoch_results(epoch_i, run_directory=run_directory)

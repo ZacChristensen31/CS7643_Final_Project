@@ -40,7 +40,7 @@ class Tokenizer():
         if tokenizer == 'spacy':
             print('Loading SpaCy')
             import spacy
-            nlp = spacy.load('en')
+            nlp = spacy.load('en_core_web_sm')
             self.tokenize = lambda string: [token.text for token in nlp(string)]
 
         # Tokenize with punctuations other than periods

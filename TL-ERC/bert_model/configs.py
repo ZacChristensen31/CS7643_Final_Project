@@ -54,6 +54,9 @@ class Config(object):
         self.label_path = self.data_dir.joinpath('labels.pkl')
         self.sentence_length_path = self.data_dir.joinpath('sentence_length.pkl')
         self.conversation_length_path = self.data_dir.joinpath('conversation_length.pkl')
+        self.audio_path = self.data_dir.joinpath('audio.pkl')
+        self.audio_wav2vec_path = self.data_dir.joinpath('audio_wav2vec.pkl')
+        self.visual_path = self.data_dir.joinpath('visuals.pkl')
 
     def __str__(self):
         """Pretty-print configurations in alphabetical order"""
@@ -75,23 +78,28 @@ def get_config(parse=True, **optional_kwargs):
     # Mode
     parser.add_argument('--mode', type=str, default='train')
     parser.add_argument('--runs', type=int, default=5)
+    parser.add_argument('--modalities', default=['text'], type=list, nargs='+')
 
     # Train
     parser.add_argument('--num_classes', type=int, default=0) 
-    parser.add_argument('--batch_size', type=int, default=2)
-    parser.add_argument('--eval_batch_size', type=int, default=2)
-    parser.add_argument('--n_epoch', type=int, default=500)
-    parser.add_argument('--patience', type=int, default=10)
+    parser.add_argument('--batch_size', type=int, default=2)        #really small?
+    parser.add_argument('--eval_batch_size', type=int, default=2)   #really small?
+    parser.add_argument('--n_epoch', type=int, default=20)          #Usually stops early @ ~15-20
+    parser.add_argument('--patience', type=int, default=5)          #lowered from 10 for efficiency during testing
     parser.add_argument('--minimum_improvement', type=int, default=0.001)
     parser.add_argument('--learning_rate', type=float, default=1e-4)
     parser.add_argument('--optimizer', type=str, default='Adam')
     parser.add_argument('--clip', type=float, default=1.0)
-    parser.add_argument('--checkpoint', type=str, default=None)
-    parser.add_argument('--load_checkpoint', type=str, default=None)
+
+    #toggle whether to load pre-trained weights
+    parser.add_argument('--text_checkpoint', type=str, default="../generative_weights/cornell_weights.pkl")
+    # parser.add_argument('--load_checkpoint', type=str, default=None)
     parser.add_argument('--num_bert_layers', type=int, default=4)
     parser.add_argument('--training_percentage', type=float, default=1.0)
 
     # Currently does not support lstm
+    # TEXT MODEL PARAMETERS
+    parser.add_argument('--text_model', type=str, default='bc_RNN')
     parser.add_argument('--rnn', type=str, default='gru')
     parser.add_argument('--rnncell', type=str, default='gru')
     parser.add_argument('--num_layers', type=int, default=1)
@@ -104,14 +112,22 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--feedforward', type=str, default='FeedForward')
     parser.add_argument('--activation', type=str, default='Tanh')
 
-    # Model
-    parser.add_argument('--model', type=str, default='bc_RNN')
+    #AUDIO MODEL PARAMETERS
+    parser.add_argument('--audio_checkpoint', type=str, default=None)
 
+    #VISUAL MODEL PARAMETERS
+    parser.add_argument('--visual_checkpoint', type=str, default=None)
+
+    #COMBINATION MODEL PARAMETERS
+    #--> push raw features through single model together?
+    #--> train independently and combine predictions?
+    parser.add_argument('--combined_checkpoint', type=str, default=None)
 
     # Utility
     parser.add_argument('--print_every', type=int, default=100)
     parser.add_argument('--plot_every_epoch', type=int, default=1)
     parser.add_argument('--save_every_epoch', type=int, default=1)
+    parser.add_argument('--run_name', type=str, default=None)
 
     # Data
     parser.add_argument('--data', type=str, default='iemocap')
