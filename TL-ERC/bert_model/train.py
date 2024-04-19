@@ -13,11 +13,11 @@ def load_pickle(path):
 
 
 if __name__ == '__main__':
-    config = get_config(mode='train',data='iemocap',parse=False,text_checkpoint=None,run_name='Test')
+    config = get_config(mode='train',data='iemocap',parse=False,run_name='TextOnly_Pretrained')
     val_config = get_config(mode='valid',data='iemocap',parse=False,text_checkpoint=None)
     test_config = get_config(mode='test',data='iemocap',parse=False,text_checkpoint=None,)
 
-    _RUNS = 1
+    _RUNS = 10
 
     _best_test_loss, _best_test_f1_w, _best_test_f1_m, _best_epoch = [], [], [], []
 
@@ -61,8 +61,12 @@ if __name__ == '__main__':
             shuffle=False)
 
         # for testing
-        solver = Solver(config, train_data_loader,
-                        eval_data_loader, test_data_loader, is_train=True)
+        solver = Solver(config,
+                        train_data_loader,
+                        eval_data_loader,
+                        test_data_loader,
+                        is_train=True,
+                        models=[])
 
         outputs = '../run_outputs'
         if config.run_name is not None:
@@ -92,37 +96,3 @@ if __name__ == '__main__':
         solver.train(
             run_directory=run_directory
         )
-        for model in solver.models:
-            model.plot_results("Loss", show_results=True)
-            model.plot_results('F1', show_results=True)
-        print('done')
-
-        # to-do: ADD result tracking across multiple runs
-        # maybe generic results tracker class would be helpful...
-        # also would be nice to have confusion matrices, per class accuracies, etc
-
-        # print("\n\nBest test loss")
-        # print(best_test_loss)
-        # print("Best test f1 weighted")
-        # print(best_test_f1_w)
-        # print("Best epoch")
-        # print(best_epoch)
-        # _best_test_loss.append(best_test_loss)
-        # _best_test_f1_w.append(best_test_f1_w)
-        # _best_epoch.append(best_epoch)
-
-
-    # Print final
-    # print(f"\n\nAverage across runs:")
-    #
-    # print("Best epoch")
-    # print(_best_epoch)
-    #
-    # print("\n\nBest test loss")
-    # print(np.mean(np.array(_best_test_loss), axis=0))
-    #
-    # print("Overall test f1 weighted")
-    # print(np.array(_best_test_f1_w))
-    #
-    # print("Best test f1 weighted")
-    # print(np.mean(np.array(_best_test_f1_w), axis=0))

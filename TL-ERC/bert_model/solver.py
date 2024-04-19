@@ -269,6 +269,7 @@ class TextModel(Model):
         # unpack and flatten inputs
         (conversations, labels, conversation_length, sentence_length, _, _, _, type_ids, masks) = data
         input_conversations = conversations
+        orig_input_labels = [i for item in labels for i in item]
 
         with torch.no_grad():
             input_sentences = flat_to_var(conversations)
