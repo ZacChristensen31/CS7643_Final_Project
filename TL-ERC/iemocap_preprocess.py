@@ -15,9 +15,7 @@ project_dir = Path(__file__).resolve().parent
 datasets_dir = project_dir.joinpath('datasets/')
 iemocap_dir = datasets_dir.joinpath('iemocap/')
 iemocap_pickle = iemocap_dir.joinpath("IEMOCAP_features_raw.pkl")
-audio_pickles = [iemocap_dir.joinpath("audio_data_0.pkl"),
-                iemocap_dir.joinpath("audio_data_1.pkl"),
-                iemocap_dir.joinpath("audio_data_2.pkl")]
+audio_pickle = [iemocap_dir.joinpath(f'audio/audio_{i}.pkl') for i in range(38)]
 GLOVE_DIR = project_dir.joinpath('glove/')
 
 # Text Tokenizer
@@ -49,9 +47,8 @@ class IEMOCAP:
 
         #load and concat audio data
         self.audioRaw = {}
-        for path in audio_pickles:
+        for path in audio_pickle:
             self.audioRaw.update(pickle.load(open(path, "rb"), encoding="latin1"))
-
 
 
 def tokenize_conversation(lines):
