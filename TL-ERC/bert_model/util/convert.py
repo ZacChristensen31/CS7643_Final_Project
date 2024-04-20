@@ -2,6 +2,8 @@ import torch
 from torch.autograd import Variable
 
 
+BIDIRECTIONAL_DIM = {True: 2, False: 1}
+
 def to_var(x, gpu_id=None, is_async=False):
     """Tensor => Variable"""
     if torch.cuda.is_available():

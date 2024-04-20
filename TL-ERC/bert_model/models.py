@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from util import to_var, pad, normal_kl_div, normal_logpdf, bag_of_words_loss, to_bow, EOS_ID
+from util import to_var, pad, normal_kl_div, normal_logpdf, bag_of_words_loss, to_bow, EOS_ID, BIDIRECTIONAL_DIM
 import layer
 import numpy as np
 import random
@@ -105,19 +105,33 @@ class Wav2Vec(nn.Module):
 
     def __init__(self, config):
         super(Wav2Vec, self).__init__()
-
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.config = config
 
         #load pretrained model & freeze feature extractor, as these CNN layers have been sufficiently pretrained
-        # self.feat_ext = Wav2Vec2FeatureExtractor(feature_size=1, sampling_rate=16000, padding_value=0.0,
-        #                                          do_normalize=True, return_attention_mask=False)
-        self.config = config
-        self.processor = Wav2Vec2Processor.from_pretrained(config.audio_base_model)
-        self.base_model = Wav2Vec2Model.from_pretrained(config.audio_base_model)
+        try:
+            self.processor = Wav2Vec2Processor.from_pretrained(config.audio_base_model)
+            self.base_model = Wav2Vec2Model.from_pretrained(config.audio_base_model)
+        except:
+            self.processor = Wav2Vec2Processor.from_pretrained(r"C:\Users\jglicksm\git\CS7643_Final_Project\TL-ERC\WAV2VEC")
+            self.base_model = Wav2Vec2Model.from_pretrained(r"C:\Users\jglicksm\git\CS7643_Final_Project\TL-ERC\WAV2VEC")
+
         self.base_model.feature_extractor._freeze_parameters()
+        self.hidden_size = self.base_model.config.hidden_size
+
+        #add optional RNN context layer across sentences
+        if config.audio_rnn is not None:
+            self.rnn = getattr(nn, config.audio_rnn.upper())(input_size=self.hidden_size,
+                                                             hidden_size=self.hidden_size//2,
+                                                             num_layers=config.audio_num_layers,
+                                                             bidirectional=config.audio_bidirectional,
+                                                             batch_first=True)
 
         #add dropout and FC layer for classification
+        self.fc1 = nn.Linear(self.hidden_size, 128)
         self.dropout = nn.Dropout(config.audio_dropout)
-        self.fc = nn.Linear(self.base_model.config.hidden_size, config.num_classes)
+        self.act = nn.Tanh()
+        self.fc2 = nn.Linear(128, config.num_classes)
 
     def pool(self, hidden):
         if self.config.audio_pooling == 'mean':
@@ -127,8 +141,20 @@ class Wav2Vec(nn.Module):
         elif self.config.audio_pooling == 'max':
             return torch.max(hidden, dim=1)[0]
 
+    def get_init_h(self, batch):
+        bidir = BIDIRECTIONAL_DIM[self.config.audio_bidirectional]
+        return to_var(torch.zeros(self.config.audio_num_layers*BIDIRECTIONAL_DIM[self.config.audio_bidirectional],
+                                  batch, self.hidden_size//bidir))
+
     def forward(self, input):
         processed = self.processor(input,sampling_rate=16000, return_tensors='pt', padding=True)
-        hidden = self.pool(self.base_model(processed.input_values)['last_hidden_state'])
-        hidden = self.dropout(hidden)
-        return self.fc(hidden)
+        hidden = self.pool(self.base_model(processed.input_values.to(self.device))['last_hidden_state'])
+        if self.config.audio_rnn is not None:
+            hidden, _ = self.rnn(hidden.unsqueeze(0), self.get_init_h(1))
+            hidden = hidden.squeeze(0)
+            #SUM bidirectional outputsf
+            # if self.config.audio_bidirectional:
+            #     hidden = (hidden[:, :self.hidden_size] + hidden[:, self.hidden_size:])
+        hidden = self.fc1(hidden)
+        hidden = self.dropout(self.act(hidden))
+        return self.fc2(hidden)

@@ -172,6 +172,8 @@ class Model(ABC):
 
         report.to_csv(report_path,mode=mode,header=header)
 
+        if self.best_epoch == (epoch_num+1):
+            torch.save(self.model.state_dict(), f'{run_directory}/best_model.pth')
 
     @staticmethod
     def print_metric(y_true, y_pred, mode):
@@ -323,15 +325,15 @@ class AudioModel(Model):
         self.model.train()
 
         # unpack, flatten, to cuda
-        (_,labels,_,_,_,_,wav2vec,_,_) = data
+        (_,labels,_,_,_,_,audio,_,_) = data
         var_labels = flat_to_var(labels)
         # var_raw_audio = flat_to_var(raw_audio)
-        wav2vec = [i for item in wav2vec for i in item]
+        audio = [i for item in audio for i in item]
         labels = [i for item in labels for i in item]
 
         # reset gradient
         self.optimizer.zero_grad()
-        logits = self.model(wav2vec)
+        logits = self.model(audio)
 
         preds = list(np.argmax(logits.detach().cpu().numpy(), axis=1))
         batch_loss = self.loss_func(logits, var_labels)
@@ -344,39 +346,24 @@ class AudioModel(Model):
         batch_loss.backward()
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.clip)
         self.optimizer.step()
-        print("SUCCESSFULLY THROUGH TRAINING")
-
 
     def evaluate(self, data):
         self.model.eval()
-        (_, labels, _, _, _, _, raw_audio, _, _) = data
-        var_labels = flat_to_var(labels)
-
+        (_, labels, _, _, _, _, audio, _, _) = data
+        audio = [i for item in audio for i in item]
         orig_input_labels = [i for item in labels for i in item]
 
-
-
         with torch.no_grad():
-            input = flat_to_var(raw_audio)
-            input_labels = flat_to_var(labels)
-            input_sentence_length = flat_to_var(sentence_length)
-            input_conversation_length = to_var(torch.LongTensor([l for l in conversation_length]))
-            input_masks = flat_to_var(masks)
+            var_labels = flat_to_var(labels)
+            logits = self.model(audio)
 
-        sentence_logits = self.model(input_sentences,
-                                     input_sentence_length,
-                                     input_conversation_length,
-                                     input_masks)
+        preds = list(np.argmax(logits.detach().cpu().numpy(), axis=1))
+        batch_loss = self.loss_func(logits, var_labels)
 
-        present_predictions = list(np.argmax(sentence_logits.detach().cpu().numpy(), axis=1))
-        batch_loss = self.loss_func(sentence_logits, input_labels)
-
-        self.val_predictions += present_predictions
+        self.val_predictions += preds
         self.val_ground_truth += orig_input_labels
         assert not isnan(batch_loss.item())
         self.val_batch_loss_history.append(batch_loss.item())
-
-        pass
 
     @property
     def checkpoint(self):
@@ -445,7 +432,6 @@ class Solver(object):
                 if mod == 'text':
                     self.models.append(TextModel(self.config))
                 elif mod == 'audio':
-                    print("Audio model not implemented yet -- setting empty")
                     self.models.append(AudioModel(self.config))
                 elif mod == 'visual':
                     print("Visual model not implemented yet -- setting empty")

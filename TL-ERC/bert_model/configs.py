@@ -120,6 +120,12 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--audio_dropout', type=float, default=0.2)
     parser.add_argument('--audio_learning_rate', type=float, default=1e-4)
 
+    #optional rnn context layer on wav2vec features
+    parser.add_argument('--audio_rnn', type=str, default='gru')
+    parser.add_argument('--audio_bidirectional', type=str2bool, default=True)
+    parser.add_argument('--audio_num_layers', type=int, default=1)
+
+
     #VISUAL MODEL PARAMETERS
     parser.add_argument('--visual_checkpoint', type=str, default=None)
 
