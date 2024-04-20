@@ -119,7 +119,7 @@ class DialogDataset(Dataset):
         return self.len
 
 
-def get_loader(sentences, labels, conversation_length, sentence_length, audio, visual, audioWav2Vec, batch_size=100, data=None, shuffle=True):
+def get_loader(sentences, labels, conversation_length, sentence_length, audio, visual, audioRaw, batch_size=100, data=None, shuffle=True):
     """Load DataLoader of given DialogDataset"""
 
     dataset = DialogDataset(sentences,
@@ -128,7 +128,7 @@ def get_loader(sentences, labels, conversation_length, sentence_length, audio, v
                             sentence_length,
                             audio,
                             visual,
-                            audioWav2Vec,
+                            audioRaw,
                             data=data)
 
     for sentence, label in zip(sentences, labels):
@@ -151,10 +151,10 @@ def get_loader(sentences, labels, conversation_length, sentence_length, audio, v
         data.sort(key=lambda x: x[2], reverse=True)
 
         # Separate
-        sentences, labels, conversation_length, sentence_length, audio, visual, audioWav2Vec, type_id, mask = zip(*data)
+        sentences, labels, conversation_length, sentence_length, audio, visual, audioRaw, type_id, mask = zip(*data)
 
         # return sentences, conversation_length, sentence_length.tolist()
-        return sentences, labels, conversation_length, sentence_length, audio, visual, audioWav2Vec, type_id, mask
+        return sentences, labels, conversation_length, sentence_length, audio, visual, audioRaw, type_id, mask
 
 
     data_loader = DataLoader(

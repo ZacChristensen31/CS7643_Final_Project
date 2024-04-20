@@ -55,7 +55,7 @@ class Config(object):
         self.sentence_length_path = self.data_dir.joinpath('sentence_length.pkl')
         self.conversation_length_path = self.data_dir.joinpath('conversation_length.pkl')
         self.audio_path = self.data_dir.joinpath('audio.pkl')
-        self.audio_wav2vec_path = self.data_dir.joinpath('audio_wav2vec.pkl')
+        self.audioRaw_path = self.data_dir.joinpath('audioRaw.pkl')
         self.visual_path = self.data_dir.joinpath('visuals.pkl')
 
     def __str__(self):
@@ -114,6 +114,11 @@ def get_config(parse=True, **optional_kwargs):
 
     #AUDIO MODEL PARAMETERS
     parser.add_argument('--audio_checkpoint', type=str, default=None)
+    parser.add_argument('--audio_model', type=str, default='Wav2Vec')
+    parser.add_argument('--audio_base_model', type=str, default="facebook/wav2vec2-base-960h")
+    parser.add_argument('--audio_pooling', type=str, default='mean')   #mean, max, pool
+    parser.add_argument('--audio_dropout', type=float, default=0.2)
+    parser.add_argument('--audio_learning_rate', type=float, default=1e-4)
 
     #VISUAL MODEL PARAMETERS
     parser.add_argument('--visual_checkpoint', type=str, default=None)

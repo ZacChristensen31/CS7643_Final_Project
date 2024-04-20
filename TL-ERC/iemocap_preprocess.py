@@ -15,6 +15,9 @@ project_dir = Path(__file__).resolve().parent
 datasets_dir = project_dir.joinpath('datasets/')
 iemocap_dir = datasets_dir.joinpath('iemocap/')
 iemocap_pickle = iemocap_dir.joinpath("IEMOCAP_features_raw.pkl")
+audio_pickles = [iemocap_dir.joinpath("audio_data_0.pkl"),
+                iemocap_dir.joinpath("audio_data_1.pkl"),
+                iemocap_dir.joinpath("audio_data_2.pkl")]
 GLOVE_DIR = project_dir.joinpath('glove/')
 
 # Text Tokenizer
@@ -33,7 +36,6 @@ class IEMOCAP:
          self.videoAudio,
          self.videoVisual,
          self.videoSentence,
-         self.audioWav2vec,
          self.trainVid_raw,
          self.testVid) = pickle.load(open(iemocap_pickle, "rb"), encoding="latin1")
 
@@ -44,6 +46,12 @@ class IEMOCAP:
         
         # Calculating maximum sentence length
         self.max_conv_length = max([len(self.videoSentence[vid]) for vid in self.trainVid])
+
+        #load and concat audio data
+        self.audioRaw = {}
+        for path in audio_pickles:
+            self.audioRaw.update(pickle.load(open(path, "rb"), encoding="latin1"))
+
 
 
 def tokenize_conversation(lines):
@@ -120,7 +128,7 @@ if __name__ == '__main__':
         conv_visual = [iemocap.videoVisual[vid] for vid in iemocap.vids[split_type]]
 
         conv_audio = [iemocap.videoAudio[vid] for vid in iemocap.vids[split_type]]
-        conv_audio_wav2vec = [iemocap.audioWav2vec[vid] for vid in iemocap.vids[split_type]]
+        conv_audio_raw = [iemocap.audioRaw[vid] for vid in iemocap.vids[split_type]]
 
 
         print(f'Processing {split_type} dataset...')
@@ -157,7 +165,7 @@ if __name__ == '__main__':
         #currently no procesing/padding being done here
         to_pickle(conv_visual, split_data_dir.joinpath('visuals.pkl'))
         to_pickle(conv_audio, split_data_dir.joinpath('audio.pkl'))
-        to_pickle(conv_audio_wav2vec, split_data_dir.joinpath('audio_wav2vec.pkl'))
+        to_pickle(conv_audio_raw, split_data_dir.joinpath('audioRaw.pkl'))
 
         if split_type == 'train':
             print('Save Vocabulary...')

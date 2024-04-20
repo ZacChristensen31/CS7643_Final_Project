@@ -6,16 +6,16 @@ import numpy as np
 import random
 
 from pytorch_pretrained_bert.modeling import BertModel
+from transformers import Wav2Vec2Model,Wav2Vec2Processor,Wav2Vec2FeatureExtractor
 
-
-# nn.Sequential(*list(BertModel.from_pretrained("bert-base-uncased").modules())[:-10])
+#from transformers import DistilBertModel, DistilBertConfig
 
 class bc_RNN(nn.Module):
     def __init__(self, config):
         super(bc_RNN, self).__init__()
 
         self.config = config
-        self.encoder = BertModel.from_pretrained("bert-base-uncased")
+        self.encoder = BertModel.from_pretrained("bert-base-uncased")   #pretrained bert transformer
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         context_input_size = (config.num_layers
@@ -98,5 +98,37 @@ class bc_RNN(nn.Module):
 
         output = self.decoder2output(decoder_init)
 
-
         return output
+
+class Wav2Vec(nn.Module):
+    """Simple initial model that attaches classifier to wav2vec"""
+
+    def __init__(self, config):
+        super(Wav2Vec, self).__init__()
+
+
+        #load pretrained model & freeze feature extractor, as these CNN layers have been sufficiently pretrained
+        # self.feat_ext = Wav2Vec2FeatureExtractor(feature_size=1, sampling_rate=16000, padding_value=0.0,
+        #                                          do_normalize=True, return_attention_mask=False)
+        self.config = config
+        self.processor = Wav2Vec2Processor.from_pretrained(config.audio_base_model)
+        self.base_model = Wav2Vec2Model.from_pretrained(config.audio_base_model)
+        self.base_model.feature_extractor._freeze_parameters()
+
+        #add dropout and FC layer for classification
+        self.dropout = nn.Dropout(config.audio_dropout)
+        self.fc = nn.Linear(self.base_model.config.hidden_size, config.num_classes)
+
+    def pool(self, hidden):
+        if self.config.audio_pooling == 'mean':
+            return torch.mean(hidden, dim=1)
+        elif self.config.audio_pooling == 'sum':
+            return torch.sum(hidden, dim=1)
+        elif self.config.audio_pooling == 'max':
+            return torch.max(hidden, dim=1)[0]
+
+    def forward(self, input):
+        processed = self.processor(input,sampling_rate=16000, return_tensors='pt', padding=True)
+        hidden = self.pool(self.base_model(processed.input_values)['last_hidden_state'])
+        hidden = self.dropout(hidden)
+        return self.fc(hidden)

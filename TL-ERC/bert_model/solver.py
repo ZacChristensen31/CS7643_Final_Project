@@ -297,18 +297,85 @@ class AudioModel(Model):
 
     def __init__(self, config):
         super().__init__(config)
+        self.loss_func = nn.CrossEntropyLoss()
 
     def build(self):
-        pass
+
+        if self.model is None:
+            self.model = getattr(models, self.config.audio_model)(self.config)
+
+        if torch.cuda.is_available():
+            self.model.cuda()
+
+        # Overview Parameters
+        print('Audio Model Parameters')
+        for name, param in self.model.named_parameters():
+            print('\t' + name + '\t', list(param.size()))
+
+        if self.checkpoint is not None:
+            self.load_model()
+
+        self.optimizer = self.config.optimizer(
+            filter(lambda p: p.requires_grad, self.model.parameters()),
+            lr=self.config.audio_learning_rate)
 
     def train(self, data):
-        if self.done:
-            pass
         self.model.train()
-        pass
+
+        # unpack, flatten, to cuda
+        (_,labels,_,_,_,_,wav2vec,_,_) = data
+        var_labels = flat_to_var(labels)
+        # var_raw_audio = flat_to_var(raw_audio)
+        wav2vec = [i for item in wav2vec for i in item]
+        labels = [i for item in labels for i in item]
+
+        # reset gradient
+        self.optimizer.zero_grad()
+        logits = self.model(wav2vec)
+
+        preds = list(np.argmax(logits.detach().cpu().numpy(), axis=1))
+        batch_loss = self.loss_func(logits, var_labels)
+        self.predictions += preds
+        self.ground_truth += labels
+        assert not isnan(batch_loss.item())
+        self.batch_loss_history.append(batch_loss.item())
+
+        # Back-prop, clip, step
+        batch_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.clip)
+        self.optimizer.step()
+        print("SUCCESSFULLY THROUGH TRAINING")
+
 
     def evaluate(self, data):
         self.model.eval()
+        (_, labels, _, _, _, _, raw_audio, _, _) = data
+        var_labels = flat_to_var(labels)
+
+        orig_input_labels = [i for item in labels for i in item]
+
+
+
+        with torch.no_grad():
+            input = flat_to_var(raw_audio)
+            input_labels = flat_to_var(labels)
+            input_sentence_length = flat_to_var(sentence_length)
+            input_conversation_length = to_var(torch.LongTensor([l for l in conversation_length]))
+            input_masks = flat_to_var(masks)
+
+        sentence_logits = self.model(input_sentences,
+                                     input_sentence_length,
+                                     input_conversation_length,
+                                     input_masks)
+
+        present_predictions = list(np.argmax(sentence_logits.detach().cpu().numpy(), axis=1))
+        batch_loss = self.loss_func(sentence_logits, input_labels)
+
+        self.val_predictions += present_predictions
+        self.val_ground_truth += orig_input_labels
+        assert not isnan(batch_loss.item())
+        self.val_batch_loss_history.append(batch_loss.item())
+
         pass
 
     @property
