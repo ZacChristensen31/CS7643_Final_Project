@@ -129,7 +129,7 @@ def get_config(parse=True, **optional_kwargs):
     #optional rnn context layer on wav2vec features
     parser.add_argument('--audio_rnn', type=str, default='gru')
     parser.add_argument('--audio_bidirectional', type=str2bool, default=True)
-    parser.add_argument('--audio_num_layers', type=int, default=1)
+    parser.add_argument('--audio_num_layers', type=int, default=4)
 
 
     #VISUAL MODEL PARAMETERS

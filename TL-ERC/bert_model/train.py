@@ -11,6 +11,14 @@ def load_pickle(path):
     with open(path, 'rb') as f:
         return pickle.load(f)
 
+def summarize_run(solver):
+    out = []
+    for m in solver.models:
+        out.append(pd.Series([m.best_epoch,
+                              np.min(m.epoch_loss),np.min(m.val_epoch_loss),
+                              np.max(m.w_train_f1),np.max(m.w_valid_f1)]).rename(m.__name__)
+                   )
+    return out
 
 if __name__ == '__main__':
 
@@ -19,7 +27,7 @@ if __name__ == '__main__':
     test_config = get_config(mode='test',parse=False)
 
     _RUNS = 3
-
+    summary = {}
     for run in range(_RUNS):
         print(config)
         # No. of videos to consider
@@ -92,6 +100,8 @@ if __name__ == '__main__':
             f.write(str(test_config))
 
         solver.build()
-        solver.train(
-            run_directory=run_directory
-        )
+        solver.train(run_directory=run_directory)
+        summary[run] = pd.concat(summarize_run(solver))
+
+    summary = pd.DataFrame(summary, index=['BestEpoch','BestTrainLoss','BestValLoss','BestTrainF1','BestValF1'])
+    summary.T.to_csv(outputs+"\\summary.csv")
