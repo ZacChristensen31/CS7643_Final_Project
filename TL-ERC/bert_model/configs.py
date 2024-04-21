@@ -84,7 +84,7 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--num_classes', type=int, default=0) 
     parser.add_argument('--batch_size', type=int, default=2)        #really small?
     parser.add_argument('--eval_batch_size', type=int, default=2)   #really small?
-    parser.add_argument('--n_epoch', type=int, default=10)          #Usually stops early @ ~15-20
+    parser.add_argument('--n_epoch', type=int, default=30)          #Usually stops early @ ~15-20
     parser.add_argument('--patience', type=int, default=5)          #lowered from 10 for efficiency during testing
     parser.add_argument('--minimum_improvement', type=int, default=0.001)
     parser.add_argument('--learning_rate', type=float, default=1e-4)
@@ -114,11 +114,17 @@ def get_config(parse=True, **optional_kwargs):
 
     #AUDIO MODEL PARAMETERS
     parser.add_argument('--audio_checkpoint', type=str, default=None)
-    parser.add_argument('--audio_model', type=str, default='Wav2Vec')
+    parser.add_argument('--audio_model', type=str, default='OpenSmile')
     parser.add_argument('--audio_base_model', type=str, default="facebook/wav2vec2-base-960h")
-    parser.add_argument('--audio_pooling', type=str, default='max')   #mean, max, sum
+    parser.add_argument('--audio_pooling', type=str, default='max')
+    parser.add_argument('--audio_activation', type=str, default='relu')
+
+    #mean, max, sum
     parser.add_argument('--audio_dropout', type=float, default=0.2)
+    parser.add_argument('--audio_hidden_size', type=int, default=256)
     parser.add_argument('--audio_learning_rate', type=float, default=1e-4)
+    parser.add_argument('--audio_freeze_base', type=float, default=True)
+
 
     #optional rnn context layer on wav2vec features
     parser.add_argument('--audio_rnn', type=str, default='gru')

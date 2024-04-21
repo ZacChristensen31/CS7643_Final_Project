@@ -81,6 +81,7 @@ class Model(ABC):
 
     def epoch_reset(self, epoch_i):
         """performance tracking -- could move this outside model """
+        self.epoch_i = epoch_i
 
         # update end of epoch stats
         if len(self.batch_loss_history) > 0:
@@ -315,26 +316,37 @@ class AudioModel(Model):
         if self.checkpoint is not None:
             self.load_model()
 
-        self.optimizer = self.config.optimizer(self.model.parameters(),
+        # if self.config.audio_freeze_base:
+        #     for param in self.model.base_model.parameters():
+        #         param.requires_grad = False
+
+        self.optimizer = self.config.optimizer(filter(lambda p: p.requires_grad, self.model.parameters()),
                                                lr=self.config.audio_learning_rate)
         self.loss_func = nn.CrossEntropyLoss(weight=torch.tensor([0.28,0.16,0.1,0.14,0.22,0.1]).to(self.model.device))
 
+    def predict(self, data):
+
+        (_, labels, conv_length, _, audio, _, audioRaw, _, _) = data
+        var_audio = torch.tensor([i for item in audio for i in item]).float().to(self.model.device)
+        # var_audio = self.model.processor([i for item in audioRaw for i in item],
+        #                                  sampling_rate=16000,
+        #                                  return_tensors='pt',
+        #                                  padding=True).input_values
+
+        # reset gradient
+        self.optimizer.zero_grad()
+        return self.model(var_audio, conv_length)
 
     def train(self, data):
         self.model.train()
 
         # unpack, flatten, to cuda
-        (_,labels,conv_length,_,_,_,audio,_,_) = data
+        (_,labels,conv_length,_,audio,_,audioRaw,_,_) = data
         var_labels = flat_to_var(labels)
         labels = [i for item in labels for i in item]
-        audio = self.model.processor([i for item in audio for i in item],
-                                     sampling_rate=16000,
-                                     return_tensors='pt',
-                                     padding=True)
 
-        # reset gradient
         self.optimizer.zero_grad()
-        logits = self.model(to_var(audio.input_values), conv_length)
+        logits = self.predict(data)
         batch_loss = self.loss_func(logits, var_labels)
 
         # Back-prop, clip, step
@@ -342,26 +354,22 @@ class AudioModel(Model):
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.clip)
         self.optimizer.step()
 
-        #update tracking
+        # update tracking
         preds = list(np.argmax(logits.detach().cpu().numpy(), axis=1))
         self.predictions += preds
         self.ground_truth += labels
         assert not isnan(batch_loss.item())
         self.batch_loss_history.append(batch_loss.item())
 
-
     def evaluate(self, data):
+
         self.model.eval()
-        (_, labels, conv_len, _, _, _, audio, _, _) = data
+        (_, labels, conv_len, _, audio, _, audioRaw, _, _) = data
         orig_input_labels = [i for item in labels for i in item]
 
         with torch.no_grad():
+            logits = self.predict(data)
             var_labels = flat_to_var(labels)
-            audio = self.model.processor([i for item in audio for i in item],
-                                         sampling_rate=16000,
-                                         return_tensors='pt',
-                                         padding=True)
-            logits = self.model(to_var(audio.input_values),conv_len)
 
         preds = list(np.argmax(logits.detach().cpu().numpy(), axis=1))
         batch_loss = self.loss_func(logits, var_labels)

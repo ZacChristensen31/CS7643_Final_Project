@@ -13,16 +13,14 @@ def load_pickle(path):
 
 
 if __name__ == '__main__':
-    config = get_config(mode='train',data='iemocap',parse=False,run_name='TextOnly_Pretrained')
-    val_config = get_config(mode='valid',data='iemocap',parse=False,text_checkpoint=None)
-    test_config = get_config(mode='test',data='iemocap',parse=False,text_checkpoint=None,)
 
-    _RUNS = 10
+    config = get_config(mode='train',parse=False, modalities=['audio'], run_name='TEST_AUDIO')
+    val_config = get_config(mode='valid',parse=False,)
+    test_config = get_config(mode='test',parse=False)
 
-    _best_test_loss, _best_test_f1_w, _best_test_f1_m, _best_epoch = [], [], [], []
+    _RUNS = 3
 
     for run in range(_RUNS):
-
         print(config)
         # No. of videos to consider
         training_data_len = int(config.training_percentage * \
@@ -48,23 +46,24 @@ if __name__ == '__main__':
             visual=load_pickle(val_config.visual_path),
             batch_size=val_config.eval_batch_size,
             shuffle=False)
-        
-        test_data_loader = get_loader(
-            sentences=load_pickle(test_config.sentences_path),
-            labels=load_pickle(test_config.label_path),
-            conversation_length=load_pickle(test_config.conversation_length_path),
-            sentence_length=load_pickle(test_config.sentence_length_path),
-            audio=load_pickle(test_config.audio_path),
-            audioRaw=load_pickle(test_config.audioRaw_path),
-            visual=load_pickle(test_config.visual_path),
-            batch_size=test_config.eval_batch_size,
-            shuffle=False)
+
+        #commenting out for now to save memory since we arent using
+        # test_data_loader = get_loader(
+        #     sentences=load_pickle(test_config.sentences_path),
+        #     labels=load_pickle(test_config.label_path),
+        #     conversation_length=load_pickle(test_config.conversation_length_path),
+        #     sentence_length=load_pickle(test_config.sentence_length_path),
+        #     audio=load_pickle(test_config.audio_path),
+        #     audioRaw=load_pickle(test_config.audioRaw_path),
+        #     visual=load_pickle(test_config.visual_path),
+        #     batch_size=test_config.eval_batch_size,
+        #     shuffle=False)
 
         # for testing
         solver = Solver(config,
                         train_data_loader,
                         eval_data_loader,
-                        test_data_loader,
+                        test_data_loader=None,
                         is_train=True,
                         models=[])
 
