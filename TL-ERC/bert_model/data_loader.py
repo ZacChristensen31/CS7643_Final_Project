@@ -8,7 +8,7 @@ from iemocap_preprocess import pad_sentences
 SEQ_LEN = 30
 
 class DialogDataset(Dataset):
-    def __init__(self, conversations, labels, conversation_length, sentence_length, audio, visual, audioWav2Vec, data=None):
+    def __init__(self, conversations, labels, conversation_length, sentence_length, audio, visual, audioRaw, data=None):
 
         # [total_data_size, max_conversation_length, max_sentence_length]
         # tokenized raw text of sentences
@@ -26,18 +26,12 @@ class DialogDataset(Dataset):
         self.visual = visual
         self.data = data
         self.len = len(conversations)
-        self.audioWav2Vec = audioWav2Vec
+        self.audioRaw = audioRaw
 
         # Prepare for BERT
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased", do_lower_case=True)
         self.prepare_BERT()
 
-        #Pad audio to max length -- borrow function from text preprocessing, but too big to preprocess and store
-        # self.raw_audio,_ = pad_sentences(raw_audio,
-        #                                  max_sentence_length=AUDIO_LEN,
-        #                                  max_conversation_length=max(self.conversation_length),
-        #                                  eos_token=0,
-        #                                  pad_token=0)
 
     def prepare_BERT(self,):
 
@@ -109,11 +103,11 @@ class DialogDataset(Dataset):
         conversation_length = self.conversation_length[index]
         sentence_length = self.sentence_length[index]
         audio = self.audio[index]
-        audioWav2Vec = self.audioWav2Vec[index]
+        audioRaw = self.audioRaw[index]
         visual = self.visual[index]
         type_id = self.type_ids[index]
         masks = self.masks[index]
-        return conversation, labels, conversation_length, sentence_length, audio, visual,audioWav2Vec, type_id, masks
+        return conversation, labels, conversation_length, sentence_length, audio, visual,audioRaw, type_id, masks
 
     def __len__(self):
         return self.len

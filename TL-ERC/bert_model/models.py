@@ -5,6 +5,7 @@ import layer
 import numpy as np
 import random
 
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, pad_sequence
 from pytorch_pretrained_bert.modeling import BertModel
 from transformers import Wav2Vec2Model,Wav2Vec2Processor,Wav2Vec2FeatureExtractor
 
@@ -128,10 +129,10 @@ class Wav2Vec(nn.Module):
                                                              batch_first=True)
 
         #add dropout and FC layer for classification
-        self.fc1 = nn.Linear(self.hidden_size, 128)
+        self.fc1 = nn.Linear(self.hidden_size, 256)
         self.dropout = nn.Dropout(config.audio_dropout)
         self.act = nn.Tanh()
-        self.fc2 = nn.Linear(128, config.num_classes)
+        self.fc2 = nn.Linear(256, config.num_classes)
 
     def pool(self, hidden):
         if self.config.audio_pooling == 'mean':
@@ -146,15 +147,31 @@ class Wav2Vec(nn.Module):
         return to_var(torch.zeros(self.config.audio_num_layers*BIDIRECTIONAL_DIM[self.config.audio_bidirectional],
                                   batch, self.hidden_size//bidir))
 
-    def forward(self, input):
-        processed = self.processor(input,sampling_rate=16000, return_tensors='pt', padding=True)
-        hidden = self.pool(self.base_model(processed.input_values.to(self.device))['last_hidden_state'])
+
+    def pack_input_seq(self, seq_input, lengths):
+        """
+        Align sequences into batch form such that each batch
+        represents a conversation. Pack and pad data to match longest
+        conv length while minimizing compute on padded items
+        """
+        sequences, start = [], -0
+        for length in lengths:
+            sequences.append(seq_input[start:start + length])
+            start += length
+        padded_seq = pad_sequence(sequences, batch_first=True)
+        packed_input = pack_padded_sequence(padded_seq, lengths, batch_first=True, enforce_sorted=False)
+        return packed_input
+
+    def forward(self, input, seq_lengths):
+        hidden = self.pool(self.base_model(input)['last_hidden_state'])
         if self.config.audio_rnn is not None:
-            hidden, _ = self.rnn(hidden.unsqueeze(0), self.get_init_h(1))
-            hidden = hidden.squeeze(0)
-            #SUM bidirectional outputsf
-            # if self.config.audio_bidirectional:
-            #     hidden = (hidden[:, :self.hidden_size] + hidden[:, self.hidden_size:])
-        hidden = self.fc1(hidden)
-        hidden = self.dropout(self.act(hidden))
-        return self.fc2(hidden)
+            #pack features into aligned/padded convo batches, then
+            #flatten back to sentence level after context rnn
+            packed_input = self.pack_input_seq(hidden, seq_lengths)
+            hidden,_ = self.rnn(packed_input, self.get_init_h(len(seq_lengths)))
+            hidden,_ = pad_packed_sequence(hidden, batch_first=True)
+            hidden = torch.cat([hidden[i, :length] for i, length in enumerate(seq_lengths)], dim=0)
+
+        output = self.fc1(self.act(hidden))
+        output = self.dropout(self.act(output))
+        return self.fc2(output)
