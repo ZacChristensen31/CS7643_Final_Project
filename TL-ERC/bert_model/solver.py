@@ -46,9 +46,12 @@ class Model(ABC):
     def checkpoint(self, data):
         pass
 
-    def load_model(self):
-        print(f'Load parameters from {self.checkpoint}')
-        pretrained_dict = torch.load(self.checkpoint, map_location=torch.device(self.model.device))
+    def load_model(self, override_checkpoint=None):
+
+        target_checkpoint = self.checkpoint if override_checkpoint is None else override_checkpoint
+
+        print(f'Load parameters from {target_checkpoint}')
+        pretrained_dict = torch.load(target_checkpoint, map_location=torch.device(self.model.device))
         model_dict = self.model.state_dict()
 
         # filter out unnecessary keys
@@ -110,7 +113,7 @@ class Model(ABC):
             print(f"BEST EPOCH {self.best_epoch} ")
             print(f"LOSS: {self.min_val_loss}, F1: {np.max(self.w_valid_f1)}")
 
-        #reset epoch trackers
+        # reset epoch trackers
         self.batch_loss_history = []
         self.predictions = []
         self.ground_truth = []
@@ -159,8 +162,8 @@ class Model(ABC):
         val_report = pd.DataFrame(self.val_report[-1]).T
         tr_report = pd.DataFrame(self.train_report[-1]).T
         report = val_report.join(tr_report, rsuffix='_Train')
-        report.index = pd.MultiIndex.from_product([[epoch_num],report.index],
-                                                  names=['Epoch','Class'])
+        report.index = pd.MultiIndex.from_product([[epoch_num], report.index],
+                                                  names=['Epoch', 'Class'])
 
         if not os.path.exists(file_path):
             with open(file_path, 'w') as f:
@@ -168,11 +171,12 @@ class Model(ABC):
             mode, header = 'w', True
 
         with open(f'{run_directory}/results.csv', 'a+') as f:
-            f.write(f'{epoch_num},{self.epoch_loss[-1]},{self.val_epoch_loss[-1]},{self.w_train_f1[-1]},{self.w_valid_f1[-1]}\n')
+            f.write(
+                f'{epoch_num},{self.epoch_loss[-1]},{self.val_epoch_loss[-1]},{self.w_train_f1[-1]},{self.w_valid_f1[-1]}\n')
 
-        report.to_csv(report_path,mode=mode,header=header)
+        report.to_csv(report_path, mode=mode, header=header)
 
-        if self.best_epoch == (epoch_num+1):
+        if self.best_epoch == (epoch_num + 1):
             torch.save(self.model.state_dict(), f'{run_directory}/best_model.pth')
 
     @staticmethod
@@ -227,6 +231,20 @@ class TextModel(Model):
             filter(lambda p: p.requires_grad, self.model.parameters()),
             lr=self.config.learning_rate)
 
+    def predict(self, data):
+        conversations, labels, conversation_length, sentence_length, _, _, _, type_ids, masks = data
+
+        with torch.no_grad():
+            input_sentences = flat_to_var(conversations)
+            input_sentence_length = flat_to_var(sentence_length)
+            input_conversation_length = to_var(torch.LongTensor([l for l in conversation_length]))
+            input_masks = flat_to_var(masks)
+
+        return self.model(input_sentences,
+                          input_sentence_length,
+                          input_conversation_length,
+                          input_masks)
+
     @property
     def checkpoint(self):
         return self.config.text_checkpoint
@@ -235,8 +253,8 @@ class TextModel(Model):
         """ from TL-ERC """
         self.model.train()
 
-        #unpack, flatten, to cuda
-        (conversations, labels, conversation_length, sentence_length, _,_,_,type_ids, masks) = data
+        # unpack, flatten, to cuda
+        (conversations, labels, conversation_length, sentence_length, _, _, _, type_ids, masks) = data
         input_conversations = conversations
         orig_input_labels = [i for item in labels for i in item]
 
@@ -316,22 +334,15 @@ class AudioModel(Model):
         if self.checkpoint is not None:
             self.load_model()
 
-        # if self.config.audio_freeze_base:
-        #     for param in self.model.base_model.parameters():
-        #         param.requires_grad = False
-
         self.optimizer = self.config.optimizer(filter(lambda p: p.requires_grad, self.model.parameters()),
                                                lr=self.config.audio_learning_rate)
-        self.loss_func = nn.CrossEntropyLoss(weight=torch.tensor([0.28,0.16,0.1,0.14,0.22,0.1]).to(self.model.device))
+        self.loss_func = nn.CrossEntropyLoss(
+            weight=torch.tensor([0.28, 0.16, 0.1, 0.14, 0.22, 0.1]).to(self.model.device))
 
     def predict(self, data):
 
         (_, labels, conv_length, _, audio, _, audioRaw, _, _) = data
         var_audio = torch.tensor([i for item in audio for i in item]).float().to(self.model.device)
-        # var_audio = self.model.processor([i for item in audioRaw for i in item],
-        #                                  sampling_rate=16000,
-        #                                  return_tensors='pt',
-        #                                  padding=True).input_values
 
         # reset gradient
         self.optimizer.zero_grad()
@@ -341,7 +352,7 @@ class AudioModel(Model):
         self.model.train()
 
         # unpack, flatten, to cuda
-        (_,labels,conv_length,_,audio,_,audioRaw,_,_) = data
+        (_, labels, conv_length, _, audio, _, audioRaw, _, _) = data
         var_labels = flat_to_var(labels)
         labels = [i for item in labels for i in item]
 
@@ -414,15 +425,150 @@ class CombinedModel(Model):
         super().__init__(config)
 
     def build(self):
-        pass
+
+        print(f'=== STARTING BUILD ===')
+        # This is going to use multiple modals (perhaps something configurable?)
+        # basically will be take the outputs of multiple modalities, pass through
+        # a few fully connected layers, and then pass through a final softmax layer
+
+        # We want to load the models first, then will eventually pass their predictions
+        # to the combined model's outputs
+
+        self.model = getattr(models, self.config.combined_model)(self.config)
+
+        self.text_wrapper = TextModel(self.config)
+        self.audio_wrapper = AudioModel(self.config)
+
+        self.text_wrapper.model = getattr(models, self.config.text_model)(self.config)
+        self.audio_wrapper.model = getattr(models, self.config.audio_model)(self.config)
+
+        self.text_wrapper.build()
+        self.audio_wrapper.build()
+
+        print(f'=== MODELS CREATED ===')
+
+        if torch.cuda.is_available():
+            self.model.cuda()
+            self.text_wrapper.model.cuda()
+            self.audio_wrapper.model.cuda()
+
+        # Get the checkpoints for the pre-trained models
+        text_checkpoint = self.config.text_checkpoint
+        audio_checkpoint = self.config.audio_checkpoint
+
+        # Load the models conditionally (I assume we'll have trained models,
+        # but just want to make sure we can load them)
+        if text_checkpoint is not None:
+            self.text_wrapper.load_model(override_checkpoint=text_checkpoint)
+
+        if audio_checkpoint is not None:
+            self.audio_wrapper.load_model(override_checkpoint=audio_checkpoint)
+
+        print(f'=== MODELS LOADED ===')
+
+        # Freeze the models
+        for param in self.text_wrapper.model.parameters():
+            param.requires_grad = False
+
+        for param in self.audio_wrapper.model.parameters():
+            param.requires_grad = False
+
+        print(f'=== MODELS FROZEN ===')
+
+        # Following the other models, print out the parameters
+        print('Combined Model Parameters')
+        for name, param in self.model.named_parameters():
+            print('\t' + name + '\t', list(param.size()))
+
+        if self.checkpoint is not None:
+            self.load_model()
+
+        # Finish setting optimizer and loss function
+        self.optimizer = self.config.optimizer(
+            filter(lambda p: p.requires_grad, self.model.parameters()),
+            lr=self.config.learning_rate
+        )
+
+        self.loss_func = nn.CrossEntropyLoss()
+
+        print(f'=== BUILD COMPLETE ===')
+
+    def predict(self, data):
+
+        # NOTE: We already have the date - just need to pass it through the models
+
+        # Get the logits from the base models
+        text_logits = self.text_wrapper.predict(data)
+        audio_logits = self.audio_wrapper.predict(data)
+
+        # Concatenate the logits
+        combined_outputs = torch.cat((text_logits, audio_logits), dim=1)
+
+        return self.model(combined_outputs)
 
     def train(self, data):
         self.model.train()
-        pass
+
+        # Get the data - this will pass to both the models first
+        conversations, labels, conversation_length, sentence_length, audio, visual, audio_raw, type_ids, masks = data
+
+        # Flatten the labels
+        flattened_labels = flat_to_var(labels)
+        labels = [i for item in labels for i in item]
+
+        # Reset the gradient
+        self.optimizer.zero_grad()
+
+        # Get the outputs from the combined model
+        combined_output = self.predict(data)
+
+        # Get the loss
+        batch_loss = self.loss_func(combined_output, flattened_labels)
+
+        # Backpropogation as normal, then following what Jeri did in Audio to clip
+        # and optimizer step per normal
+        batch_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.clip)
+        self.optimizer.step()
+
+        # Get the predictions, and update things for consistent tracking
+        predictions = list(np.argmax(combined_output.detach().cpu().numpy(), axis=1))
+        self.predictions += predictions
+        self.ground_truth += labels
+
+        # Make sure we don't have any NaNs
+        assert not isnan(batch_loss.item())
+
+        # Update the batch loss history
+        self.batch_loss_history.append(batch_loss.item())
 
     def evaluate(self, data):
+        # Nearly the same as train, but we don't backpropogate,
+        # since we don't want any updates
         self.model.eval()
-        pass
+
+        # Get the data
+        conversations, labels, conversation_length, sentence_length, audio, visual, audio_raw, type_ids, masks = data
+
+        # Flatten the labels
+        original_labels = [i for item in labels for i in item]
+
+        # Get the outputs from the combined model
+        with torch.no_grad():
+            combined_output = self.predict(data)
+            flattened_labels = flat_to_var(labels)
+
+        # Get the predictions and loss
+        predictions = list(np.argmax(combined_output.detach().cpu().numpy(), axis=1))
+        batch_loss = self.loss_func(combined_output, flattened_labels)
+
+        # Update the outputs for tracking/graphing
+        self.val_predictions += predictions
+        self.val_ground_truth += original_labels
+
+        # Make sure we don't have any NaNs
+        assert not isnan(batch_loss.item())
+        self.val_batch_loss_history.append(batch_loss.item())
 
     @property
     def checkpoint(self):
@@ -451,7 +597,6 @@ class Solver(object):
                     print("Visual model not implemented yet -- setting empty")
                     self.models.append(VisualModel(self.config))
                 elif mod == 'combined':
-                    print("Combined model not implemented yet -- setting empty")
                     self.models.append(CombinedModel(self.config))
 
             for model in self.models:
