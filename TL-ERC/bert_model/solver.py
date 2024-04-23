@@ -231,6 +231,22 @@ class TextModel(Model):
             filter(lambda p: p.requires_grad, self.model.parameters()),
             lr=self.config.learning_rate)
 
+
+    def predict(self, data):
+
+        #unpack, flatten, to cuda
+        (conversations, labels, conversation_length, sentence_length,_,_,_,type_ids, masks) = data
+        input_sentences = flat_to_var(conversations)
+        input_labels = flat_to_var(labels)
+        input_sentence_length = flat_to_var(sentence_length)
+        input_conversation_length = to_var(torch.LongTensor([l for l in conversation_length]))
+        input_masks = flat_to_var(masks)
+
+        return self.model(input_sentences,
+                          input_sentence_length,
+                          input_conversation_length,
+                          input_masks)
+
     @property
     def checkpoint(self):
         return self.config.text_checkpoint
@@ -238,24 +254,14 @@ class TextModel(Model):
     def train(self, data):
         """ from TL-ERC """
         self.model.train()
+        self.optimizer.zero_grad()
 
         #unpack, flatten, to cuda
         (conversations, labels, conversation_length, sentence_length, _,_,_,type_ids, masks) = data
         input_conversations = conversations
         orig_input_labels = [i for item in labels for i in item]
-
-        input_sentences = flat_to_var(input_conversations)
         input_labels = flat_to_var(labels)
-        input_sentence_length = flat_to_var(sentence_length)
-        input_conversation_length = to_var(torch.LongTensor([l for l in conversation_length]))
-        input_masks = flat_to_var(masks)
-
-        # reset gradient
-        self.optimizer.zero_grad()
-        sentence_logits = self.model(input_sentences,
-                                     input_sentence_length,
-                                     input_conversation_length,
-                                     input_masks)
+        sentence_logits = self.predict(data)
 
         present_predictions = list(np.argmax(sentence_logits.detach().cpu().numpy(), axis=1))
         batch_loss = self.loss_func(sentence_logits, input_labels)
@@ -278,16 +284,8 @@ class TextModel(Model):
         orig_input_labels = [i for item in labels for i in item]
 
         with torch.no_grad():
-            input_sentences = flat_to_var(conversations)
             input_labels = flat_to_var(labels)
-            input_sentence_length = flat_to_var(sentence_length)
-            input_conversation_length = to_var(torch.LongTensor([l for l in conversation_length]))
-            input_masks = flat_to_var(masks)
-
-        sentence_logits = self.model(input_sentences,
-                                     input_sentence_length,
-                                     input_conversation_length,
-                                     input_masks)
+            sentence_logits = self.predict(data)
 
         present_predictions = list(np.argmax(sentence_logits.detach().cpu().numpy(), axis=1))
         batch_loss = self.loss_func(sentence_logits, input_labels)
