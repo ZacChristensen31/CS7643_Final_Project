@@ -23,15 +23,15 @@ def summarize_run(solver):
 if __name__ == '__main__':
 
 
-    # multi = get_config(mode='train',parse=False, modalities=['combined'], run_name='TEST_COMBO',
-    #                    visual_checkpoint = r"C:\Users\jglicksm\git\CS7643_Final_Project\TL-ERC\run_outputs\TEST_VISUAL\2024-04-22_17-57-21_Run2\best_model.pth",
-    #                    audio_checkpoint = r"C:\Users\jglicksm\git\CS7643_Final_Project\TL-ERC\run_outputs\HIGHER_LR_.001\2024-04-22_11-49-03_Run2\best_model.pth",
-    #                    text_checkpoint = r"C:\Users\jglicksm\git\CS7643_Final_Project\TL-ERC\run_outputs\PRETRAINED_TEXT\2024-04-22_18-36-44_Run0\best_model.pth"
-    #                    )
-    text = get_config(mode='train',parse=False, modalities=['text'], run_name='PRETRAINED_TEXT', n_epochs=15)
-    audio_lstm = get_config(mode='train',parse=False, modalities=['audio'], run_name='AUDIO_LSTM', audio_rnn='LSTM')
+    multi = get_config(mode='train',parse=False, modalities=['combined'], run_name='TEST_MULTI',
+                       visual_checkpoint = "../generative_weights/best_visual_model.pth",
+                       audio_checkpoint = "../generative_weights/best_audio_model.pth",
+                       text_checkpoint = "../generative_weights/best_text_model.pth",
+                       )
+    # visual = get_config(mode='train',parse=False, modalities=['visual'], run_name='VISUAL_TEST')
+    # audio_lstm = get_config(mode='train',parse=False, modalities=['audio'], run_name='AUDIO_LSTM', audio_rnn='LSTM')
 
-    configs=[text, audio_lstm]
+    configs=[multi]
     val_config = get_config(mode='valid',parse=False,)
     test_config = get_config(mode='test',parse=False)
 
