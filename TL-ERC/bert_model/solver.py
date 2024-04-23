@@ -305,7 +305,7 @@ class AudioModel(Model):
     def build(self):
 
         if self.model is None:
-            self.model = getattr(models, self.config.audio_model)(self.config)
+            self.model = getattr(models, self.config.audio_model)(self.config,'audio')
 
         if torch.cuda.is_available():
             self.model.cuda()
@@ -318,31 +318,19 @@ class AudioModel(Model):
         if self.checkpoint is not None:
             self.load_model()
 
-        # if self.config.audio_freeze_base:
-        #     for param in self.model.base_model.parameters():
-        #         param.requires_grad = False
-
-        self.optimizer = self.config.optimizer(filter(lambda p: p.requires_grad, self.model.parameters()),
+        self.optimizer = self.config.optimizer(filter(lambda p: p.requires_grad,
+                                                      self.model.parameters()),
                                                lr=self.config.audio_learning_rate)
         self.loss_func = nn.CrossEntropyLoss(weight=torch.tensor([0.28,0.16,0.1,0.14,0.22,0.1]).to(self.model.device))
 
     def predict(self, data):
-
         (_, labels, conv_length, _, audio, _, audioRaw, _, _) = data
         var_audio = torch.tensor([i for item in audio for i in item]).float().to(self.model.device)
-        # var_audio = self.model.processor([i for item in audioRaw for i in item],
-        #                                  sampling_rate=16000,
-        #                                  return_tensors='pt',
-        #                                  padding=True).input_values
-
-        # reset gradient
-        self.optimizer.zero_grad()
         return self.model(var_audio, conv_length)
 
     def train(self, data):
         self.model.train()
 
-        # unpack, flatten, to cuda
         (_,labels,conv_length,_,audio,_,audioRaw,_,_) = data
         var_labels = flat_to_var(labels)
         labels = [i for item in labels for i in item]
@@ -364,7 +352,6 @@ class AudioModel(Model):
         self.batch_loss_history.append(batch_loss.item())
 
     def evaluate(self, data):
-
         self.model.eval()
         (_, labels, conv_len, _, audio, _, audioRaw, _, _) = data
         orig_input_labels = [i for item in labels for i in item]
@@ -393,15 +380,72 @@ class VisualModel(Model):
         super().__init__(config)
 
     def build(self):
-        pass
+        if self.model is None:
+            self.model = getattr(models, self.config.audio_model)(self.config, 'visual')
+
+        if torch.cuda.is_available():
+            self.model.cuda()
+
+        # Overview Parameters
+        print('Visual Model Parameters')
+        for name, param in self.model.named_parameters():
+            print('\t' + name + '\t', list(param.size()))
+
+        if self.checkpoint is not None:
+            self.load_model()
+
+        self.optimizer = self.config.optimizer(filter(lambda p: p.requires_grad,
+                                                      self.model.parameters()),
+                                               lr=self.config.visual_learning_rate)
+        self.loss_func = nn.CrossEntropyLoss(weight=torch.tensor([0.28, 0.16, 0.1, 0.14, 0.22, 0.1]).to(self.model.device))
+
 
     def train(self, data):
         self.model.train()
-        pass
+
+        (_,labels,conv_length,_,_,visual,_,_,_) = data
+        var_labels = flat_to_var(labels)
+        labels = [i for item in labels for i in item]
+
+        self.optimizer.zero_grad()
+        logits = self.predict(data)
+        batch_loss = self.loss_func(logits, var_labels)
+
+        # Back-prop, clip, step
+        batch_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.clip)
+        self.optimizer.step()
+
+        # update tracking
+        preds = list(np.argmax(logits.detach().cpu().numpy(), axis=1))
+        self.predictions += preds
+        self.ground_truth += labels
+        assert not isnan(batch_loss.item())
+        self.batch_loss_history.append(batch_loss.item())
+
+
+    def predict(self, data):
+        (_,labels,conv_length,_,_,visual,_,_,_) = data
+        var_vis = torch.tensor([i for item in visual for i in item]).float().to(self.model.device)
+        return self.model(var_vis, conv_length)
 
     def evaluate(self, data):
         self.model.eval()
-        pass
+
+        (_,labels,conv_length,_,_,visual,_,_,_) = data
+        orig_input_labels = [i for item in labels for i in item]
+
+        with torch.no_grad():
+            logits = self.predict(data)
+            var_labels = flat_to_var(labels)
+
+        preds = list(np.argmax(logits.detach().cpu().numpy(), axis=1))
+        batch_loss = self.loss_func(logits, var_labels)
+
+        self.val_predictions += preds
+        self.val_ground_truth += orig_input_labels
+        assert not isnan(batch_loss.item())
+        self.val_batch_loss_history.append(batch_loss.item())
 
     @property
     def checkpoint(self):
@@ -450,10 +494,8 @@ class Solver(object):
                 elif mod == 'audio':
                     self.models.append(AudioModel(self.config))
                 elif mod == 'visual':
-                    print("Visual model not implemented yet -- setting empty")
                     self.models.append(VisualModel(self.config))
                 elif mod == 'combined':
-                    print("Combined model not implemented yet -- setting empty")
                     self.models.append(CombinedModel(self.config))
 
             for model in self.models:
