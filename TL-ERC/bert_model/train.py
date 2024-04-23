@@ -11,20 +11,22 @@ def load_pickle(path):
     with open(path, 'rb') as f:
         return pickle.load(f)
 
+
 def summarize_run(solver):
     out = []
     for m in solver.models:
         out.append(pd.Series([m.best_epoch,
-                              np.min(m.epoch_loss),np.min(m.val_epoch_loss),
-                              np.max(m.w_train_f1),np.max(m.w_valid_f1)]).rename(m.__name__)
+                              np.min(m.epoch_loss), np.min(m.val_epoch_loss),
+                              np.max(m.w_train_f1), np.max(m.w_valid_f1)]).rename(m.__name__)
                    )
     return out
 
+
 if __name__ == '__main__':
 
-    config = get_config(mode='train',parse=False, modalities=['audio'], run_name='TEST_AUDIO')
-    val_config = get_config(mode='valid',parse=False,)
-    test_config = get_config(mode='test',parse=False)
+    config = get_config(mode='train', parse=False, modalities=['combined'], run_name='COMBINED')
+    val_config = get_config(mode='valid', parse=False, )
+    test_config = get_config(mode='test', parse=False)
 
     _RUNS = 3
     summary = {}
@@ -32,7 +34,7 @@ if __name__ == '__main__':
         print(config)
         # No. of videos to consider
         training_data_len = int(config.training_percentage * \
-            len(load_pickle(config.sentences_path)))
+                                len(load_pickle(config.sentences_path)))
 
         train_data_loader = get_loader(
             sentences=load_pickle(config.sentences_path)[:training_data_len],
@@ -55,7 +57,7 @@ if __name__ == '__main__':
             batch_size=val_config.eval_batch_size,
             shuffle=False)
 
-        #commenting out for now to save memory since we arent using
+        # commenting out for now to save memory since we arent using
         # test_data_loader = get_loader(
         #     sentences=load_pickle(test_config.sentences_path),
         #     labels=load_pickle(test_config.label_path),
@@ -82,7 +84,7 @@ if __name__ == '__main__':
         if not os.path.exists(outputs):
             os.makedirs(outputs)
 
-        #append seed/run number
+        # append seed/run number
         run_timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         run_directory = f'{outputs}/{run_timestamp}_Run{run}'
 
@@ -103,5 +105,5 @@ if __name__ == '__main__':
         solver.train(run_directory=run_directory)
         summary[run] = pd.concat(summarize_run(solver))
 
-    summary = pd.DataFrame(summary, index=['BestEpoch','BestTrainLoss','BestValLoss','BestTrainF1','BestValF1'])
-    summary.T.to_csv(outputs+"\\summary.csv")
+    summary = pd.DataFrame(summary, index=['BestEpoch', 'BestTrainLoss', 'BestValLoss', 'BestTrainF1', 'BestValF1'])
+    summary.T.to_csv(outputs + "\\summary.csv")
