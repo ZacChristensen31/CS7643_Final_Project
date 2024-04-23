@@ -55,7 +55,7 @@ class Config(object):
         self.sentence_length_path = self.data_dir.joinpath('sentence_length.pkl')
         self.conversation_length_path = self.data_dir.joinpath('conversation_length.pkl')
         self.audio_path = self.data_dir.joinpath('audio.pkl')
-        self.audioRaw_path = self.data_dir.joinpath('audioRaw.pkl')
+        self.audioRaw_path = self.data_dir.joinpath('audio.pkl')
         self.visual_path = self.data_dir.joinpath('visuals.pkl')
 
     def __str__(self):
@@ -78,7 +78,7 @@ def get_config(parse=True, **optional_kwargs):
     # Mode
     parser.add_argument('--mode', type=str, default='train')
     parser.add_argument('--runs', type=int, default=5)
-    parser.add_argument('--modalities', default=['text'], type=list, nargs='+')
+    parser.add_argument('--modalities', default=['text'], nargs='+')
 
     # Train
     parser.add_argument('--num_classes', type=int, default=0) 
@@ -139,6 +139,7 @@ def get_config(parse=True, **optional_kwargs):
     #--> push raw features through single model together?
     #--> train independently and combine predictions?
     parser.add_argument('--combined_checkpoint', type=str, default=None)
+    parser.add_argument('--combined_model', type=str, default='CustomCombined')
 
     # Utility
     parser.add_argument('--print_every', type=int, default=100)
