@@ -179,39 +179,47 @@ class Wav2Vec(nn.Module):
         return self.fc2(output)
 
 
-class OpenSmile(nn.Module):
+class ContextClassifier(nn.Module):
     """
-    Simple model that attaches classifier to Opensmile features
-    and optional context RNN across conversations
+    Simple model that attaches classification head to processed
+    features, with optional context RNN across conversations
     """
 
-    def __init__(self, config):
-        super(OpenSmile, self).__init__()
+    def __init__(self, config, modality):
+        super(ContextClassifier, self).__init__()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.config = config
-        self.input_dim = 100
+        self.modality = modality
+        self.input_dim = self.get_attr('input_dim')
+        self.dir_dim = BIDIRECTIONAL_DIM[self.get_attr('bidirectional')]
 
         # add optional RNN context layer across sentences
         if config.audio_rnn is not None:
-            self.hidden_size = self.config.audio_hidden_size
+            self.hidden_size = self.get_attr('hidden_size')
             self.rnn = getattr(nn, config.audio_rnn.upper())(input_size=self.input_dim,
-                                                             hidden_size=self.hidden_size // 2,
-                                                             num_layers=config.audio_num_layers,
-                                                             bidirectional=config.audio_bidirectional,
+                                                             hidden_size=self.hidden_size // self.dir_dim,
+                                                             num_layers=self.get_attr('num_layers'),
+                                                             bidirectional=self.get_attr('bidirectional'),
                                                              batch_first=True)
         else:
             self.hidden_size = self.input_dim
 
         # dropout and FC layer for classification
         self.fc1 = nn.Linear(self.hidden_size, 256)
-        self.dropout = nn.Dropout(config.audio_dropout)
-        self.act = getattr(nn.functional, config.audio_activation)
+        self.dropout = nn.Dropout(self.get_attr('dropout'))
+        self.act = getattr(nn.functional, self.get_attr('activation'))
         self.fc2 = nn.Linear(256, config.num_classes)
 
+    def get_attr(self,param):
+        return getattr(self.config, f'{self.modality}_{param}')
+
     def get_init_h(self, batch):
-        bidir = BIDIRECTIONAL_DIM[self.config.audio_bidirectional]
-        return to_var(torch.zeros(self.config.audio_num_layers * BIDIRECTIONAL_DIM[self.config.audio_bidirectional],
-                                  batch, self.hidden_size // bidir))
+        h = to_var(torch.zeros(self.config.audio_num_layers * self.dir_dim,
+                               batch, self.hidden_size // self.dir_dim))
+        if self.config.audio_rnn.upper()=='GRU':
+            return h
+        elif self.config.audio_rnn.upper()=='LSTM':
+            return (h, h)  #init hidden and cell state
 
     def pack_input_seq(self, seq_input, lengths):
         """
@@ -241,3 +249,22 @@ class OpenSmile(nn.Module):
         output = self.fc1(self.dropout(input))
         output = self.act(output)
         return self.fc2(output)
+
+class MLP(nn.Module):
+    """
+    Classification head on concatenated multi-modal predictors
+    """
+    def __init__(self, config, input_dim):
+        super(MLP, self).__init__()
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.config = config
+
+        self.fc1 = nn.Linear(input_dim, config.combined_hidden_dim)
+        self.dropout = nn.Dropout(config.combined_dropout)
+        self.act = getattr(nn.functional, config.combined_activation)
+        self.fc2 = nn.Linear(config.combined_hidden_dim, config.num_classes)
+
+    def forward(self, input):
+        input = self.act(self.fc1(input))
+        input = self.dropout(input)
+        return self.fc2(input)

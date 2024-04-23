@@ -48,14 +48,18 @@ class Model(ABC):
 
     def load_model(self):
         print(f'Load parameters from {self.checkpoint}')
-        pretrained_dict = torch.load(self.checkpoint, map_location=torch.device(self.model.device))
         model_dict = self.model.state_dict()
 
-        # filter out unnecessary keys
-        filtered_pretrained_dict = {}
-        for k, v in pretrained_dict.items():
-            if (k in model_dict) and ("embedding" not in k) and ("context" in k) and ("ih" not in k):
-                filtered_pretrained_dict[k] = v
+        if '.pth' in self.checkpoint:
+            filtered_pretrained_dict = torch.load(self.checkpoint, map_location=torch.device(self.model.device))
+        else:
+            pretrained_dict = torch.load(self.checkpoint, map_location=torch.device(self.model.device))
+
+            # filter out unnecessary keys
+            filtered_pretrained_dict = {}
+            for k, v in pretrained_dict.items():
+                if (k in model_dict) and ("embedding" not in k) and ("context" in k) and ("ih" not in k):
+                    filtered_pretrained_dict[k] = v
 
         # overwrite entries in the existing state dict + load new state dict
         model_dict.update(filtered_pretrained_dict)
