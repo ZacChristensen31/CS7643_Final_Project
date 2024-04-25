@@ -488,7 +488,7 @@ class CombinedModel(Model):
 
     def train(self, data):
         self.model.train()
-        (_,labels,conv_length,_,_,visual,_,_,_) = data
+        (_,labels,conv_length,_,_,_,_,_,_) = data
         orig_input_labels = [i for item in labels for i in item]
         var_labels = flat_to_var(labels)
 
@@ -533,6 +533,184 @@ class CombinedModel(Model):
     def checkpoint(self):
         return self.config.combined_checkpoint
 
+class ConcatenatedModel(Model):
+    """Runs concatenated features through same model. To be used in a Hybrid Model later"""
+    __name__ = 'ConcatenatedModel'
+
+    def __init__(self, config):
+        super().__init__(config)
+
+    def build(self):
+
+        if self.model is None:
+            self.model = getattr(models, self.config.concat_model)(self.config)
+
+        if torch.cuda.is_available():
+            self.model.cuda()
+
+        # Overview Parameters
+        print('Concatenated Model Parameters')
+        for name, param in self.model.named_parameters():
+            print('\t' + name + '\t', list(param.size()))
+
+        if self.checkpoint is not None:
+            self.load_model()
+
+        self.optimizer = self.config.optimizer(filter(lambda p: p.requires_grad,
+                                                      self.model.parameters()),
+                                               lr=self.config.concat_learning_rate)
+
+        self.loss_func = nn.CrossEntropyLoss(weight=torch.tensor([0.28, 0.16, 0.1, 0.14, 0.22, 0.1]).to(self.model.device))
+
+    def predict(self, data):
+        (_, labels, conv_length, _, audio, visual, audio_raw, _, _) = data
+        var_audio = torch.tensor([i for item in audio for i in item]).float().to(self.model.device)
+        var_visual = torch.tensor([i for item in visual for i in item]).float().to(self.model.device)
+
+        concatenated = torch.cat([var_audio, var_visual], dim=1)
+        return self.model(concatenated, conv_length)
+
+    def train(self, data):
+        self.model.train()
+
+        (_, labels, conv_length, _, audio, visual, audio_raw, _, _) = data
+        var_labels = flat_to_var(labels)
+        labels = [i for item in labels for i in item]
+
+        self.optimizer.zero_grad()
+        logits = self.predict(data)
+        batch_loss = self.loss_func(logits, var_labels)
+
+        batch_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.clip)
+        self.optimizer.step()
+
+        preds = list(np.argmax(logits.detach().cpu().numpy(), axis=1))
+        self.predictions += preds
+        self.ground_truth += labels
+        assert not isnan(batch_loss.item())
+        self.batch_loss_history.append(batch_loss.item())
+
+    def evaluate(self, data):
+
+        self.model.eval()
+        (_, labels, _, _, _, _, _, _, _) = data
+        orig_input_labels = [i for item in labels for i in item]
+
+        with torch.no_grad():
+            logits = self.predict(data)
+            var_labels = flat_to_var(labels)
+
+        preds = list(np.argmax(logits.detach().cpu().numpy(), axis=1))
+        batch_loss = self.loss_func(logits, var_labels)
+
+        self.val_predictions += preds
+        self.val_ground_truth += orig_input_labels
+        assert not isnan(batch_loss.item())
+        self.val_batch_loss_history.append(batch_loss.item())
+
+    @property
+    def checkpoint(self):
+        return self.config.concat_checkpoint
+
+
+class HybridModel(Model):
+    """
+        Runs a Hybrid Model: Audio/Visual trained together, now just using the logits
+        from this concatenated model and the text model to train a final model
+    """
+    __name__ = 'HybridModel'
+
+    def __init__(self, config):
+        super().__init__(config)
+
+    def build(self):
+
+        # Concatenated Model
+        self.concatenated_model = ConcatenatedModel(self.config)
+        self.concatenated_model.build()
+
+        # Text Model
+        self.text_model = TextModel(self.config)
+        self.text_model.build()
+
+        #initiate combined
+        input_dim = 2 * self.config.num_classes
+        self.model =  getattr(models, self.config.hybrid_model)(self.config, input_dim)
+        self.model.to(self.model.device)
+        self.loss_func = nn.CrossEntropyLoss(weight=torch.tensor([0.28, 0.16, 0.1, 0.14, 0.22, 0.1]).to(self.model.device))
+
+        # Not adding underlying model params here, only backprop through meta layers
+        self.optimizer = self.config.optimizer(
+            filter(lambda p: p.requires_grad, self.model.parameters()),
+            lr=self.config.hybrid_learning_rate
+        )
+
+
+    # Take the outputs ot the ConcatenatedModel and the outputs of the TextModel
+    # and concatenate them together to pass through this final model
+    def train(self, data):
+        self.model.train()
+
+        (_, labels, conv_length, _, _, _, _, _, _) = data
+        orig_input_labels = [i for item in labels for i in item]
+        var_labels = flat_to_var(labels)
+
+        # Get the logits from the concatenated model
+        concatenated_logits = self.concatenated_model.predict(data)
+
+        # Get the logits from the text model
+        text_logits = self.text_model.predict(data)
+
+        # Concatenate the two sets of logits
+        self.optimizer.zero_grad()
+        inputs = torch.cat([concatenated_logits, text_logits], dim=1)
+        inputs.to(self.model.device)
+
+        logits = self.model(inputs)
+        batch_loss = self.loss_func(logits, var_labels)
+        batch_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.clip)
+        self.optimizer.step()
+
+        preds = list(np.argmax(logits.detach().cpu().numpy(), axis=1))
+        self.predictions += preds
+        self.ground_truth += orig_input_labels
+        assert not isnan(batch_loss.item())
+        self.batch_loss_history.append(batch_loss.item())
+
+
+    def evaluate(self, data):
+        self.model.eval()
+        (_, labels, conv_length, _, _, _, _, _, _) = data
+        orig_input_labels = [i for item in labels for i in item]
+
+        with torch.no_grad():
+            # Get the logits from the concatenated model
+            concatenated_logits = self.concatenated_model.predict(data)
+
+            # Get the logits from the text model
+            text_logits = self.text_model.predict(data)
+
+            # Concatenate the two sets of logits
+            inputs = torch.cat([concatenated_logits, text_logits], dim=1)
+            inputs.to(self.model.device)
+
+            logits = self.model(inputs)
+            var_labels = flat_to_var(labels)
+
+        batch_loss = self.loss_func(logits, var_labels)
+        preds = list(np.argmax(logits.detach().cpu().numpy(), axis=1))
+
+        self.val_predictions += preds
+        self.val_ground_truth += orig_input_labels
+        assert not isnan(batch_loss.item())
+        self.val_batch_loss_history.append(batch_loss.item())
+
+    @property
+    def checkpoint(self):
+        return self.config.hybrid_checkpoint
+
 
 class Solver(object):
     def __init__(self, config, train_data_loader, valid_data_loader, test_data_loader, is_train=True, models=[]):
@@ -556,6 +734,10 @@ class Solver(object):
                     self.models.append(VisualModel(self.config))
                 elif mod == 'combined':
                     self.models.append(CombinedModel(self.config))
+                elif mod == 'concat':
+                    self.models.append(ConcatenatedModel(self.config))
+                elif mod == 'hybrid':
+                    self.models.append(HybridModel(self.config))
 
             for model in self.models:
                 model.build()
@@ -577,6 +759,8 @@ class Solver(object):
         if not os.path.exists(images):
             os.mkdir(images)
 
+        epoch_i = 0
+
         for epoch_i in range(self.epoch_i, self.config.n_epoch):
             self.epoch_i = epoch_i
 
@@ -595,6 +779,13 @@ class Solver(object):
             # track results, plot update, reset trackers for new epoch
             for model in self.models:
                 model.epoch_reset(epoch_i)
-                model.plot_results("Loss", image_directory=images, epoch_num=epoch_i, save_results=True)
-                model.plot_results('F1', image_directory=images, epoch_num=epoch_i, save_results=True)
                 model.save_epoch_results(epoch_i, run_directory=run_directory)
+                if epoch_i % 20 == 0:
+                    model.plot_results("Loss", image_directory=images, epoch_num=epoch_i, save_results=True)
+                    model.plot_results('F1', image_directory=images, epoch_num=epoch_i, save_results=True)
+
+        for model in self.models:
+            model.epoch_reset(epoch_i)
+            model.plot_results("Loss", image_directory=images, epoch_num=epoch_i, save_results=True)
+            model.plot_results('F1', image_directory=images, epoch_num=epoch_i, save_results=True)
+            model.save_epoch_results(epoch_i, run_directory=run_directory)

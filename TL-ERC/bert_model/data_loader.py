@@ -3,7 +3,6 @@ from collections import defaultdict
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
 from pytorch_pretrained_bert.tokenization import BertTokenizer
-from iemocap_preprocess import pad_sentences
 
 SEQ_LEN = 30
 

@@ -11,29 +11,54 @@ def load_pickle(path):
     with open(path, 'rb') as f:
         return pickle.load(f)
 
+
 def summarize_run(solver):
     out = []
     for m in solver.models:
         out.append(pd.Series([m.best_epoch,
-                              np.min(m.epoch_loss),np.min(m.val_epoch_loss),
-                              np.max(m.w_train_f1),np.max(m.w_valid_f1)]).rename(m.__name__)
+                              np.min(m.epoch_loss), np.min(m.val_epoch_loss),
+                              np.max(m.w_train_f1), np.max(m.w_valid_f1)]).rename(m.__name__)
                    )
     return out
 
+
 if __name__ == '__main__':
 
+    # multi = get_config(mode='train',parse=False, modalities=['con'], run_name='TEST_MULTI',
+    #                    visual_checkpoint = "../generative_weights/best_visual_model.pth",
+    #                    audio_checkpoint = "../generative_weights/best_audio_model.pth",
+    #                    text_checkpoint = "../generative_weights/best_text_model.pth",
+    #                    )
 
-    multi = get_config(mode='train',parse=False, modalities=['combined'], run_name='TEST_MULTI',
-                       visual_checkpoint = "../generative_weights/best_visual_model.pth",
-                       audio_checkpoint = "../generative_weights/best_audio_model.pth",
-                       text_checkpoint = "../generative_weights/best_text_model.pth",
-                       )
     # visual = get_config(mode='train',parse=False, modalities=['visual'], run_name='VISUAL_TEST')
     # audio_lstm = get_config(mode='train',parse=False, modalities=['audio'], run_name='AUDIO_LSTM', audio_rnn='LSTM')
 
-    configs=[multi]
-    val_config = get_config(mode='valid',parse=False,)
-    test_config = get_config(mode='test',parse=False)
+    concatenated = get_config(
+        mode='train',
+        parse=False,
+        modalities=['concat'],
+        run_name='Concat_with_RNN',
+        batch_size=4,
+        n_epoch=250,
+        concat_dropout=0.1,
+        concat_learning_rate=1e-4,
+        concat_rnn='LSTM',
+        visual_checkpoint="../generative_weights/best_visual_model.pth",
+        audio_checkpoint="../generative_weights/best_audio_model.pth",
+    )
+
+    # hybrid = get_config(
+    #     mode='train',
+    #     parse=False,
+    #     modalities=['hybrid'],
+    #     run_name='HYBRID_TEST',
+    #     text_checkpoint="../generative_weights/cornell_weights.pkl",
+    #     concat_checkpoint="../generative_weights/best_concat_model.pth",
+    # )
+
+    configs = [concatenated]
+    val_config = get_config(mode='valid', parse=False)
+    test_config = get_config(mode='test', parse=False)
 
     _RUNS = 10
     for config in configs:
@@ -42,7 +67,7 @@ if __name__ == '__main__':
             print(config)
             # No. of videos to consider
             training_data_len = int(config.training_percentage * \
-                len(load_pickle(config.sentences_path)))
+                                    len(load_pickle(config.sentences_path)))
 
             train_data_loader = get_loader(
                 sentences=load_pickle(config.sentences_path)[:training_data_len],
@@ -114,10 +139,10 @@ if __name__ == '__main__':
             summary[run] = pd.concat(summarize_run(solver))
 
         #save out summary across runs
-        summary = pd.concat(summary,axis=1).T
-        summary.columns = ['BestEpoch','BestTrainLoss','BestValLoss','BestTrainF1','BestValF1']
+        summary = pd.concat(summary, axis=1).T
+        summary.columns = ['BestEpoch', 'BestTrainLoss', 'BestValLoss', 'BestTrainF1', 'BestValF1']
         summary.loc['AVG'] = summary.mean(axis=0)
         summary.loc['MED'] = summary.median(axis=0)
         summary.loc['MAX'] = summary.max(axis=0)
         summary.loc['MIN'] = summary.min(axis=0)
-        summary.to_csv(outputs+"/summary.csv")
+        summary.to_csv(outputs + "/summary.csv")

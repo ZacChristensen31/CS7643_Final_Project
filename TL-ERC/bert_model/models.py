@@ -1,13 +1,11 @@
 import torch
 import torch.nn as nn
-from util import to_var, pad, normal_kl_div, normal_logpdf, bag_of_words_loss, to_bow, EOS_ID, BIDIRECTIONAL_DIM
+from util import to_var, pad, BIDIRECTIONAL_DIM
 import layer
-import numpy as np
-import random
 
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, pad_sequence
 from pytorch_pretrained_bert.modeling import BertModel
-from transformers import Wav2Vec2Model,Wav2Vec2Processor,Wav2Vec2FeatureExtractor
+# from transformers import Wav2Vec2Model,Wav2Vec2Processor,Wav2Vec2FeatureExtractor
 
 #from transformers import DistilBertModel, DistilBertConfig
 
@@ -101,82 +99,82 @@ class bc_RNN(nn.Module):
 
         return output
 
-class Wav2Vec(nn.Module):
-    """Simple initial model that attaches classifier to wav2vec
-    """
-
-    def __init__(self, config):
-        super(Wav2Vec, self).__init__()
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.config = config
-
-        #load pretrained model & freeze feature extractor, as these CNN layers have been sufficiently pretrained
-        try:
-            self.processor = Wav2Vec2Processor.from_pretrained(config.audio_base_model)
-            self.base_model = Wav2Vec2Model.from_pretrained(config.audio_base_model)
-        except:
-            self.processor = Wav2Vec2Processor.from_pretrained(r"C:\Users\jglicksm\git\CS7643_Final_Project\TL-ERC\WAV2VEC")
-            self.base_model = Wav2Vec2Model.from_pretrained(r"C:\Users\jglicksm\git\CS7643_Final_Project\TL-ERC\WAV2VEC")
-
-        self.base_model.feature_extractor._freeze_parameters()
-        self.hidden_size = self.base_model.config.hidden_size
-
-        #add optional RNN context layer across sentences
-        if config.audio_rnn is not None:
-            self.rnn = getattr(nn, config.audio_rnn.upper())(input_size=self.hidden_size,
-                                                             hidden_size=self.hidden_size//2,
-                                                             num_layers=config.audio_num_layers,
-                                                             bidirectional=config.audio_bidirectional,
-                                                             batch_first=True)
-
-        #add dropout and FC layer for classification
-        self.fc1 = nn.Linear(self.hidden_size, 256)
-        self.dropout = nn.Dropout(config.audio_dropout)
-        self.act = nn.Tanh()
-        self.fc2 = nn.Linear(256, config.num_classes)
-
-    def pool(self, hidden):
-        if self.config.audio_pooling == 'mean':
-            return torch.mean(hidden, dim=1)
-        elif self.config.audio_pooling == 'sum':
-            return torch.sum(hidden, dim=1)
-        elif self.config.audio_pooling == 'max':
-            return torch.max(hidden, dim=1)[0]
-
-    def get_init_h(self, batch):
-        bidir = BIDIRECTIONAL_DIM[self.config.audio_bidirectional]
-        return to_var(torch.zeros(self.config.audio_num_layers*BIDIRECTIONAL_DIM[self.config.audio_bidirectional],
-                                  batch, self.hidden_size//bidir))
-
-    def pack_input_seq(self, seq_input, lengths):
-        """
-        Align sequences into batch form such that each batch
-        represents a conversation. Pack and pad data to match longest
-        conv length while minimizing compute on padded items
-        """
-        sequences, start = [], -0
-        for length in lengths:
-            sequences.append(seq_input[start:start + length])
-            start += length
-        padded_seq = pad_sequence(sequences, batch_first=True)
-        packed_input = pack_padded_sequence(padded_seq, lengths, batch_first=True, enforce_sorted=False)
-        return packed_input
-
-    def forward(self, input, seq_lengths):
-        hidden = self.pool(self.base_model(input)['last_hidden_state'])
-
-        if self.config.audio_rnn is not None:
-
-            #pack features into aligned/padded convo batches, then
-            #flatten back to sentence level after context rnn
-            packed_input = self.pack_input_seq(hidden, seq_lengths)
-            hidden,_ = self.rnn(packed_input, self.get_init_h(len(seq_lengths)))
-            hidden,_ = pad_packed_sequence(hidden, batch_first=True)
-            hidden = torch.cat([hidden[i, :length] for i, length in enumerate(seq_lengths)], dim=0)
-
-        output = self.fc1(self.dropout(hidden))
-        output = self.act(output)
-        return self.fc2(output)
+# class Wav2Vec(nn.Module):
+#     """Simple initial model that attaches classifier to wav2vec
+#     """
+#
+#     def __init__(self, config):
+#         super(Wav2Vec, self).__init__()
+#         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+#         self.config = config
+#
+#         #load pretrained model & freeze feature extractor, as these CNN layers have been sufficiently pretrained
+#         try:
+#             self.processor = Wav2Vec2Processor.from_pretrained(config.audio_base_model)
+#             self.base_model = Wav2Vec2Model.from_pretrained(config.audio_base_model)
+#         except:
+#             self.processor = Wav2Vec2Processor.from_pretrained(r"C:\Users\jglicksm\git\CS7643_Final_Project\TL-ERC\WAV2VEC")
+#             self.base_model = Wav2Vec2Model.from_pretrained(r"C:\Users\jglicksm\git\CS7643_Final_Project\TL-ERC\WAV2VEC")
+#
+#         self.base_model.feature_extractor._freeze_parameters()
+#         self.hidden_size = self.base_model.config.hidden_size
+#
+#         #add optional RNN context layer across sentences
+#         if config.audio_rnn is not None:
+#             self.rnn = getattr(nn, config.audio_rnn.upper())(input_size=self.hidden_size,
+#                                                              hidden_size=self.hidden_size//2,
+#                                                              num_layers=config.audio_num_layers,
+#                                                              bidirectional=config.audio_bidirectional,
+#                                                              batch_first=True)
+#
+#         #add dropout and FC layer for classification
+#         self.fc1 = nn.Linear(self.hidden_size, 256)
+#         self.dropout = nn.Dropout(config.audio_dropout)
+#         self.act = nn.Tanh()
+#         self.fc2 = nn.Linear(256, config.num_classes)
+#
+#     def pool(self, hidden):
+#         if self.config.audio_pooling == 'mean':
+#             return torch.mean(hidden, dim=1)
+#         elif self.config.audio_pooling == 'sum':
+#             return torch.sum(hidden, dim=1)
+#         elif self.config.audio_pooling == 'max':
+#             return torch.max(hidden, dim=1)[0]
+#
+#     def get_init_h(self, batch):
+#         bidir = BIDIRECTIONAL_DIM[self.config.audio_bidirectional]
+#         return to_var(torch.zeros(self.config.audio_num_layers*BIDIRECTIONAL_DIM[self.config.audio_bidirectional],
+#                                   batch, self.hidden_size//bidir))
+#
+#     def pack_input_seq(self, seq_input, lengths):
+#         """
+#         Align sequences into batch form such that each batch
+#         represents a conversation. Pack and pad data to match longest
+#         conv length while minimizing compute on padded items
+#         """
+#         sequences, start = [], -0
+#         for length in lengths:
+#             sequences.append(seq_input[start:start + length])
+#             start += length
+#         padded_seq = pad_sequence(sequences, batch_first=True)
+#         packed_input = pack_padded_sequence(padded_seq, lengths, batch_first=True, enforce_sorted=False)
+#         return packed_input
+#
+#     def forward(self, input, seq_lengths):
+#         hidden = self.pool(self.base_model(input)['last_hidden_state'])
+#
+#         if self.config.audio_rnn is not None:
+#
+#             #pack features into aligned/padded convo batches, then
+#             #flatten back to sentence level after context rnn
+#             packed_input = self.pack_input_seq(hidden, seq_lengths)
+#             hidden,_ = self.rnn(packed_input, self.get_init_h(len(seq_lengths)))
+#             hidden,_ = pad_packed_sequence(hidden, batch_first=True)
+#             hidden = torch.cat([hidden[i, :length] for i, length in enumerate(seq_lengths)], dim=0)
+#
+#         output = self.fc1(self.dropout(hidden))
+#         output = self.act(output)
+#         return self.fc2(output)
 
 
 class ContextClassifier(nn.Module):
@@ -249,6 +247,79 @@ class ContextClassifier(nn.Module):
         output = self.fc1(self.dropout(input))
         output = self.act(output)
         return self.fc2(output)
+
+class ConcatenatedClassifier(nn.Module):
+    """
+        Since ContextClassifier can handle different modalities, this is going to mimic the same functionality
+        but with the ability to concatenate multiple modalities together before classification
+    """
+    def __init__(self, config):
+
+        super(ConcatenatedClassifier, self).__init__()
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.config = config
+        self.input_dim = sum([
+            getattr(config, 'audio_input_dim'),
+            getattr(config, 'visual_input_dim')
+        ])
+        self.dir_dim = BIDIRECTIONAL_DIM[getattr(config, 'concat_bidirectional')]
+
+        if config.concat_rnn is not None:
+            self.concat_hidden_size = getattr(config, 'concat_hidden_size')
+            self.rnn = getattr(nn, config.concat_rnn.upper())(input_size=self.input_dim,
+                                                             hidden_size=self.concat_hidden_size // self.dir_dim,
+                                                             num_layers=getattr(config, 'concat_num_layers'),
+                                                             bidirectional=getattr(config, 'concat_bidirectional'),
+                                                             batch_first=True)
+        else:
+            self.concat_hidden_size = self.input_dim
+
+        # Deal with Audio RNN
+        self.fc1 = nn.Linear(self.concat_hidden_size, self.concat_hidden_size)
+        self.dropout1 = nn.Dropout(getattr(config, 'concat_dropout'))
+        self.act1 = getattr(nn.functional, getattr(config, 'concat_activation'))
+        self.fc2 = nn.Linear(self.concat_hidden_size, self.concat_hidden_size)
+        self.dropout2 = nn.Dropout(getattr(config, 'concat_dropout'))
+        self.act2 = getattr(nn.functional, getattr(config, 'concat_activation'))
+        self.fc3 = nn.Linear(self.concat_hidden_size, config.num_classes)
+
+    def get_init_h(self, batch):
+        h = to_var(torch.zeros(self.config.concat_num_layers * self.dir_dim,
+                               batch, self.concat_hidden_size // self.dir_dim))
+        if self.config.concat_rnn.upper()=='GRU':
+            return h
+        elif self.config.concat_rnn.upper()=='LSTM':
+            return (h, h)  #init hidden and cell state
+
+    def pack_input_seq(self, seq_input, lengths):
+        """
+        Align sequences into batch form such that each batch
+        represents a conversation. Pack and pad data to match longest
+        conv length while minimizing compute on padded items
+        """
+        sequences, start = [], -0
+        for length in lengths:
+            sequences.append(seq_input[start:start + length])
+            start += length
+        padded_seq = pad_sequence(sequences, batch_first=True)
+        packed_input = pack_padded_sequence(padded_seq, lengths, batch_first=True, enforce_sorted=False)
+        return packed_input
+
+    def forward(self, input_data, seq_lengths):
+
+        if self.config.concat_rnn is not None:
+            packed_input = self.pack_input_seq(input_data, seq_lengths)
+            hidden, _ = self.rnn(packed_input, self.get_init_h(len(seq_lengths)))
+            hidden, _ = pad_packed_sequence(hidden, batch_first=True)
+            input_data = torch.cat([hidden[i, :length] for i, length in enumerate(seq_lengths)], dim=0)
+
+        input_data = self.fc1(input_data)
+        input_data = self.dropout1(input_data)
+        input_data = self.act1(input_data)
+        input_data = self.fc2(input_data)
+        input_data = self.dropout2(input_data)
+        input_data = self.act2(input_data)
+        return self.fc3(input_data)
 
 class MLP(nn.Module):
     """

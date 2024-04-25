@@ -140,6 +140,25 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--visual_bidirectional', type=str2bool, default=True)
     parser.add_argument('--visual_num_layers', type=int, default=1)
 
+    # CONCATENATED MODEL PARAMETERS
+    parser.add_argument('--concat_checkpoint', type=str, default=None)
+    parser.add_argument('--concat_model', type=str, default='ConcatenatedClassifier')
+    parser.add_argument('--concat_activation', type=str, default='relu')
+    parser.add_argument('--concat_dropout', type=float, default=0.1)
+    parser.add_argument('--concat_hidden_size', type=int, default=256)
+    parser.add_argument('--concat_learning_rate', type=float, default=1e-3)
+    parser.add_argument('--concat_rnn', type=str, default='gru')
+    parser.add_argument('--concat_bidirectional', type=str2bool, default=True)
+    parser.add_argument('--concat_num_layers', type=int, default=1)
+
+    # HYBRID MODEL PARAMETERS
+    parser.add_argument('--hybrid_checkpoint', type=str, default=None)
+    parser.add_argument('--hybrid_model', type=str, default='MLP')
+    parser.add_argument('--hybrid_activation', type=str, default='relu')
+    parser.add_argument('--hybrid_dropout', type=float, default=0.1)
+    parser.add_argument('--hybrid_hidden_dim', type=int, default=128)
+    parser.add_argument('--hybrid_learning_rate', type=float, default=1e-3)
+
 
     #COMBINATION MODEL PARAMETERS
     #--> push raw features through single model together?
