@@ -3,6 +3,10 @@ from torch.autograd import Variable
 
 
 BIDIRECTIONAL_DIM = {True: 2, False: 1}
+DATA_IDX = {'audio': 4,
+            'visual': 5,
+            'text': 6
+            }
 
 def to_var(x, gpu_id=None, is_async=False):
     """Tensor => Variable"""

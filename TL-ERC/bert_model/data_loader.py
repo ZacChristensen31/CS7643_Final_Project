@@ -7,7 +7,7 @@ from pytorch_pretrained_bert.tokenization import BertTokenizer
 SEQ_LEN = 30
 
 class DialogDataset(Dataset):
-    def __init__(self, conversations, labels, conversation_length, sentence_length, audio, visual, audioRaw, data=None):
+    def __init__(self, conversations, labels, conversation_length, sentence_length, audio, visual, bertText, data=None):
 
         # [total_data_size, max_conversation_length, max_sentence_length]
         # tokenized raw text of sentences
@@ -25,7 +25,7 @@ class DialogDataset(Dataset):
         self.visual = visual
         self.data = data
         self.len = len(conversations)
-        self.audioRaw = audioRaw
+        self.bertText = bertText
 
         # Prepare for BERT
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased", do_lower_case=True)
@@ -102,17 +102,17 @@ class DialogDataset(Dataset):
         conversation_length = self.conversation_length[index]
         sentence_length = self.sentence_length[index]
         audio = self.audio[index]
-        audioRaw = self.audioRaw[index]
+        bertText = self.bertText[index]
         visual = self.visual[index]
         type_id = self.type_ids[index]
         masks = self.masks[index]
-        return conversation, labels, conversation_length, sentence_length, audio, visual,audioRaw, type_id, masks
+        return conversation, labels, conversation_length, sentence_length, audio, visual,bertText, type_id, masks
 
     def __len__(self):
         return self.len
 
 
-def get_loader(sentences, labels, conversation_length, sentence_length, audio, visual, audioRaw, batch_size=100, data=None, shuffle=True):
+def get_loader(sentences, labels, conversation_length, sentence_length, audio, visual, bertText, batch_size=100, data=None, shuffle=True):
     """Load DataLoader of given DialogDataset"""
 
     dataset = DialogDataset(sentences,
@@ -121,7 +121,7 @@ def get_loader(sentences, labels, conversation_length, sentence_length, audio, v
                             sentence_length,
                             audio,
                             visual,
-                            audioRaw,
+                            bertText,
                             data=data)
 
     for sentence, label in zip(sentences, labels):
@@ -144,10 +144,10 @@ def get_loader(sentences, labels, conversation_length, sentence_length, audio, v
         data.sort(key=lambda x: x[2], reverse=True)
 
         # Separate
-        sentences, labels, conversation_length, sentence_length, audio, visual, audioRaw, type_id, mask = zip(*data)
+        sentences, labels, conversation_length, sentence_length, audio, visual, bertText, type_id, mask = zip(*data)
 
         # return sentences, conversation_length, sentence_length.tolist()
-        return sentences, labels, conversation_length, sentence_length, audio, visual, audioRaw, type_id, mask
+        return sentences, labels, conversation_length, sentence_length, audio, visual, bertText, type_id, mask
 
 
     data_loader = DataLoader(

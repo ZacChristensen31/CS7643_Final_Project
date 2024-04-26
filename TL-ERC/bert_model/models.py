@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from util import to_var, pad, BIDIRECTIONAL_DIM
 import layer
-
+import numpy as np
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, pad_sequence
 from pytorch_pretrained_bert.modeling import BertModel
 # from transformers import Wav2Vec2Model,Wav2Vec2Processor,Wav2Vec2FeatureExtractor
@@ -258,10 +258,8 @@ class ConcatenatedClassifier(nn.Module):
         super(ConcatenatedClassifier, self).__init__()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.config = config
-        self.input_dim = sum([
-            getattr(config, 'audio_input_dim'),
-            getattr(config, 'visual_input_dim')
-        ])
+        self.input_dim = np.sum([getattr(config, f'{i}_input_dim')
+                                 for i in self.config.concat_modalities])
         self.dir_dim = BIDIRECTIONAL_DIM[getattr(config, 'concat_bidirectional')]
 
         if config.concat_rnn is not None:

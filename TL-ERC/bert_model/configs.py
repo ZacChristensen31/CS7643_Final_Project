@@ -55,7 +55,7 @@ class Config(object):
         self.sentence_length_path = self.data_dir.joinpath('sentence_length.pkl')
         self.conversation_length_path = self.data_dir.joinpath('conversation_length.pkl')
         self.audio_path = self.data_dir.joinpath('audio.pkl')
-        self.audioRaw_path = self.data_dir.joinpath('audioRaw.pkl')
+        self.bertText_path = self.data_dir.joinpath('bertText.pkl')
         self.visual_path = self.data_dir.joinpath('visuals.pkl')
 
     def __str__(self):
@@ -111,6 +111,7 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--context_size', type=int, default=256)
     parser.add_argument('--feedforward', type=str, default='FeedForward')
     parser.add_argument('--activation', type=str, default='Tanh')
+    parser.add_argument('--text_input_dim', type=int, default=100)
 
     #AUDIO MODEL PARAMETERS
     parser.add_argument('--audio_checkpoint', type=str, default=None)
@@ -150,6 +151,8 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--concat_rnn', type=str, default='gru')
     parser.add_argument('--concat_bidirectional', type=str2bool, default=True)
     parser.add_argument('--concat_num_layers', type=int, default=1)
+    parser.add_argument('--concat_modalities', type=list, default=['text','audio','visual'], nargs='+')
+
 
     # HYBRID MODEL PARAMETERS
     parser.add_argument('--hybrid_checkpoint', type=str, default=None)

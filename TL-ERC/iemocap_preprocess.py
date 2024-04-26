@@ -15,7 +15,7 @@ project_dir = Path(__file__).resolve().parent
 datasets_dir = project_dir.joinpath('datasets/')
 iemocap_dir = datasets_dir.joinpath('iemocap/')
 iemocap_pickle = iemocap_dir.joinpath("IEMOCAP_features_raw.pkl")
-audio_pickle = [iemocap_dir.joinpath(f'audio/audio_{i}.pkl') for i in range(38)]
+# audio_pickle = [iemocap_dir.joinpath(f'audio/audio_{i}.pkl') for i in range(38)]
 GLOVE_DIR = project_dir.joinpath('glove/')
 
 # Text Tokenizer
@@ -46,9 +46,9 @@ class IEMOCAP:
         self.max_conv_length = max([len(self.videoSentence[vid]) for vid in self.trainVid])
 
         #load and concat audio data
-        self.audioRaw = {}
-        for path in audio_pickle:
-            self.audioRaw.update(pickle.load(open(path, "rb"), encoding="latin1"))
+        # self.audioRaw = {}
+        # for path in audio_pickle:
+        #     self.audioRaw.update(pickle.load(open(path, "rb"), encoding="latin1"))
 
 
 def tokenize_conversation(lines):
@@ -125,8 +125,7 @@ if __name__ == '__main__':
         conv_visual = [iemocap.videoVisual[vid] for vid in iemocap.vids[split_type]]
 
         conv_audio = [iemocap.videoAudio[vid] for vid in iemocap.vids[split_type]]
-        conv_audio_raw = [iemocap.audioRaw[vid] for vid in iemocap.vids[split_type]]
-
+        conv_bert_text = [iemocap.text_data[vid] for vid in iemocap.vids[split_type]]
 
         print(f'Processing {split_type} dataset...')
         split_data_dir = iemocap_dir.joinpath(split_type)
@@ -144,11 +143,6 @@ if __name__ == '__main__':
             max_sentence_length=max_sent_len,
             max_conversation_length=max_conv_len)
 
-        #truncate audio data to keep memory under control
-        # trunc_raw_audio = []
-        # for conv in conv_audio_raw:
-        #     trunc_raw_audio.append([sent[:max_audio_len] for sent in conv])
-
         for sentence_len, label in zip(conversation_length, conv_labels):
             assert(sentence_len ==len(label))
 
@@ -162,7 +156,7 @@ if __name__ == '__main__':
         #currently no procesing/padding being done here
         to_pickle(conv_visual, split_data_dir.joinpath('visuals.pkl'))
         to_pickle(conv_audio, split_data_dir.joinpath('audio.pkl'))
-        to_pickle(conv_audio_raw, split_data_dir.joinpath('audioRaw.pkl'))
+        to_pickle(conv_bert_text, split_data_dir.joinpath('bertText.pkl'))
 
         if split_type == 'train':
             print('Save Vocabulary...')

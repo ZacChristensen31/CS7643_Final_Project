@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 import models
-from util import to_var, time_desc_decorator, flat_to_var, check_done
+from util import to_var, time_desc_decorator, flat_to_var, check_done, DATA_IDX
 import os
 from tqdm import tqdm
 from math import isnan
@@ -563,11 +563,12 @@ class ConcatenatedModel(Model):
         self.loss_func = nn.CrossEntropyLoss(weight=torch.tensor([0.28, 0.16, 0.1, 0.14, 0.22, 0.1]).to(self.model.device))
 
     def predict(self, data):
-        (_, labels, conv_length, _, audio, visual, audio_raw, _, _) = data
-        var_audio = torch.tensor([i for item in audio for i in item]).float().to(self.model.device)
-        var_visual = torch.tensor([i for item in visual for i in item]).float().to(self.model.device)
-
-        concatenated = torch.cat([var_audio, var_visual], dim=1)
+        conv_length = data[2]
+        inputs = []
+        for mod in self.config.concat_modalities:
+            feat = torch.tensor([i for item in data[DATA_IDX[mod]] for i in item]).float().to(self.model.device)
+            inputs.append(feat)
+        concatenated = torch.cat(inputs, dim=1)
         return self.model(concatenated, conv_length)
 
     def train(self, data):
