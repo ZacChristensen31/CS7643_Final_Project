@@ -10,6 +10,7 @@ from tqdm import tqdm
 from sklearn import metrics
 from sklearn.model_selection import train_test_split
 from utils import Vocab, Tokenizer, PAD_TOKEN, SOS_TOKEN, EOS_TOKEN
+from sentence_transformers import SentenceTransformer
 
 project_dir = Path(__file__).resolve().parent
 datasets_dir = project_dir.joinpath('datasets/')
@@ -21,6 +22,12 @@ GLOVE_DIR = project_dir.joinpath('glove/')
 # Text Tokenizer
 tokenizer = Tokenizer('spacy')
 
+def encode_bert(videoSentence):
+    sbert = SentenceTransformer("paraphrase-distilroberta-base-v1")
+    text_bert = {}
+    for k, conv in iemocap.videoSentence.items():
+        text_bert[k] = [sbert.encode(sent) for sent in conv]
+    return text_bert
 
 class IEMOCAP:
     '''
@@ -30,7 +37,8 @@ class IEMOCAP:
         (self.sent_ids,
          self.videoSpeakers,
          self.videoLabels,
-         self.text_data,
+         self.text_data,    #This is the sus textCNN one
+         self.text_bert,    #This bert embeddings we extracted
          self.videoAudio,
          self.videoVisual,
          self.videoSentence,
@@ -125,7 +133,7 @@ if __name__ == '__main__':
         conv_visual = [iemocap.videoVisual[vid] for vid in iemocap.vids[split_type]]
 
         conv_audio = [iemocap.videoAudio[vid] for vid in iemocap.vids[split_type]]
-        conv_bert_text = [iemocap.text_data[vid] for vid in iemocap.vids[split_type]]
+        conv_bert_text = [iemocap.text_bert[vid] for vid in iemocap.vids[split_type]]
 
         print(f'Processing {split_type} dataset...')
         split_data_dir = iemocap_dir.joinpath(split_type)

@@ -111,7 +111,7 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--context_size', type=int, default=256)
     parser.add_argument('--feedforward', type=str, default='FeedForward')
     parser.add_argument('--activation', type=str, default='Tanh')
-    parser.add_argument('--text_input_dim', type=int, default=100)
+    parser.add_argument('--text_input_dim', type=int, default=768)
 
     #AUDIO MODEL PARAMETERS
     parser.add_argument('--audio_checkpoint', type=str, default=None)
