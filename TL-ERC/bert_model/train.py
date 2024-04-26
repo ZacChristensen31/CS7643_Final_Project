@@ -75,7 +75,7 @@ if __name__ == '__main__':
                 conversation_length=load_pickle(config.conversation_length_path)[:training_data_len],
                 sentence_length=load_pickle(config.sentence_length_path)[:training_data_len],
                 audio=load_pickle(config.audio_path)[:training_data_len],
-                audioRaw=load_pickle(config.audioRaw_path)[:training_data_len],
+                bertText=load_pickle(config.bertText_path)[:training_data_len],
                 visual=load_pickle(config.visual_path)[:training_data_len],
                 batch_size=config.batch_size)
 
@@ -85,7 +85,7 @@ if __name__ == '__main__':
                 conversation_length=load_pickle(val_config.conversation_length_path),
                 sentence_length=load_pickle(val_config.sentence_length_path),
                 audio=load_pickle(val_config.audio_path),
-                audioRaw=load_pickle(val_config.audioRaw_path),
+                bertText=load_pickle(val_config.bertText_path),
                 visual=load_pickle(val_config.visual_path),
                 batch_size=val_config.eval_batch_size,
                 shuffle=False)
