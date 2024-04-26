@@ -37,13 +37,14 @@ if __name__ == '__main__':
         mode='train',
         parse=False,
         modalities=['concat'],
-        run_name='Concat_with_RNN',
-        batch_size=4,
-        n_epoch=250,
+        run_name='Concat_all',
+        batch_size=2,
+        concat_modalities=['text','audio','visual'],
+        n_epoch=40,
         concat_dropout=0.1,
-        concat_learning_rate=1e-4,
+        concat_learning_rate=1e-3,
         concat_rnn='LSTM',
-        visual_checkpoint="../generative_weights/best_visual_model.pth",
+    )
         audio_checkpoint="../generative_weights/best_audio_model.pth",
     )
 
