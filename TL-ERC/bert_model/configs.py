@@ -171,7 +171,7 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--late_fusion_modalities', type=list, default=['text','audio','visual','early_fusion'], nargs='+')
     parser.add_argument('--late_fusion_activation', type=str, default='relu')
     parser.add_argument('--late_fusion_dropout', type=float, default=0.1)
-    parser.add_argument('--late_fusion_hidden_dim', type=int, default=128)
+    parser.add_argument('--late_fusion_hidden_size', type=int, default=128)
     parser.add_argument('--late_fusion_learning_rate', type=float, default=1e-3)
 
     # Utility

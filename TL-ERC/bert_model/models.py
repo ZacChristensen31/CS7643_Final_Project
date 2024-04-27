@@ -194,7 +194,7 @@ class ContextClassifier(nn.Module):
         # add optional RNN context layer across sentences
         if config.audio_rnn is not None:
             self.hidden_size = self.get_attr('hidden_size')
-            self.rnn = getattr(nn, config.audio_rnn.upper())(input_size=self.input_dim,
+            self.rnn = getattr(nn, self.get_attr('rnn').upper())(input_size=self.input_dim,
                                                              hidden_size=self.hidden_size // self.dir_dim,
                                                              num_layers=self.get_attr('num_layers'),
                                                              bidirectional=self.get_attr('bidirectional'),
@@ -212,11 +212,11 @@ class ContextClassifier(nn.Module):
         return getattr(self.config, f'{self.modality}_{param}')
 
     def get_init_h(self, batch):
-        h = to_var(torch.zeros(self.config.audio_num_layers * self.dir_dim,
+        h = to_var(torch.zeros(self.get_attr('num_layers') * self.dir_dim,
                                batch, self.hidden_size // self.dir_dim))
-        if self.config.audio_rnn.upper()=='GRU':
+        if self.get_attr('rnn').upper()=='GRU':
             return h
-        elif self.config.audio_rnn.upper()=='LSTM':
+        elif self.get_attr('rnn').upper()=='LSTM':
             return (h, h)  #init hidden and cell state
 
     def pack_input_seq(self, seq_input, lengths):
@@ -235,7 +235,7 @@ class ContextClassifier(nn.Module):
 
     def forward(self, input, seq_lengths):
 
-        if self.config.audio_rnn is not None:
+        if self.get_attr('rnn') is not None:
             # pack features into aligned/padded convo batches, then
             packed_input = self.pack_input_seq(input, seq_lengths)
             hidden, _ = self.rnn(packed_input, self.get_init_h(len(seq_lengths)))
@@ -330,10 +330,10 @@ class MLP(nn.Module):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.config = config
 
-        self.fc1 = nn.Linear(input_dim, config.late_fusion_hidden_dim)
+        self.fc1 = nn.Linear(input_dim, config.late_fusion_hidden_size)
         self.dropout = nn.Dropout(config.late_fusion_dropout)
         self.act = getattr(nn.functional, config.late_fusion_activation)
-        self.fc2 = nn.Linear(config.late_fusion_hidden_dim, config.num_classes)
+        self.fc2 = nn.Linear(config.late_fusion_hidden_size, config.num_classes)
 
     def forward(self, input):
         input = self.act(self.fc1(input))
