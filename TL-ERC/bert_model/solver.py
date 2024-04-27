@@ -452,9 +452,9 @@ class VisualModel(Model):
         return self.config.visual_checkpoint
 
 
-class CombinedModel(Model):
+class LateFusionModel(Model):
     """ runs concatenated features through same model rather than train separately"""
-    __name__ = 'CombinedModel'
+    __name__ = 'LateFusionModel'
 
     def __init__(self, config):
         super().__init__(config)
@@ -463,27 +463,29 @@ class CombinedModel(Model):
     def build(self):
 
         #initiate and build underlying models
-        for mod in self.config.combined_modalities:
+        for mod in self.config.late_fusion_modalities:
             if mod == 'text':
                 self.models.append(TextModel(self.config))
             elif mod == 'audio':
                 self.models.append(AudioModel(self.config))
             elif mod == 'visual':
                 self.models.append(VisualModel(self.config))
+            elif mod == 'early_fusion':
+                self.models.append(EarlyFusionModel(self.config))
 
         for model in self.models:
             model.build()
 
-        #initiate combined
-        input_dim = len(self.config.combined_modalities)*self.config.num_classes
-        self.model =  getattr(models, self.config.combined_model)(self.config, input_dim)
+        #initiate late fusion model
+        input_dim = len(self.config.late_fusion_modalities)*self.config.num_classes
+        self.model =  getattr(models, self.config.late_fusion_model)(self.config, input_dim)
         self.model.to(self.model.device)
         self.loss_func = nn.CrossEntropyLoss(weight=torch.tensor([0.28, 0.16, 0.1, 0.14, 0.22, 0.1]).to(self.model.device))
 
         # Not adding underlying model params here, only backprop through meta layers
         self.optimizer = self.config.optimizer(filter(lambda p: p.requires_grad,
                                                       self.model.parameters()),
-                                               lr=self.config.combined_learning_rate)
+                                               lr=self.config.late_fusion_learning_rate)
 
 
     def train(self, data):
@@ -531,11 +533,11 @@ class CombinedModel(Model):
 
     @property
     def checkpoint(self):
-        return self.config.combined_checkpoint
+        return self.config.late_fusion_checkpoint
 
-class ConcatenatedModel(Model):
+class EarlyFusionModel(Model):
     """Runs concatenated features through same model. To be used in a Hybrid Model later"""
-    __name__ = 'ConcatenatedModel'
+    __name__ = 'EarlyFusionModel'
 
     def __init__(self, config):
         super().__init__(config)
@@ -543,13 +545,13 @@ class ConcatenatedModel(Model):
     def build(self):
 
         if self.model is None:
-            self.model = getattr(models, self.config.concat_model)(self.config)
+            self.model = getattr(models, self.config.early_fusion_model)(self.config)
 
         if torch.cuda.is_available():
             self.model.cuda()
 
         # Overview Parameters
-        print('Concatenated Model Parameters')
+        print('Early Fusion Model Parameters')
         for name, param in self.model.named_parameters():
             print('\t' + name + '\t', list(param.size()))
 
@@ -558,14 +560,14 @@ class ConcatenatedModel(Model):
 
         self.optimizer = self.config.optimizer(filter(lambda p: p.requires_grad,
                                                       self.model.parameters()),
-                                               lr=self.config.concat_learning_rate)
+                                               lr=self.config.early_fusion_learning_rate)
 
         self.loss_func = nn.CrossEntropyLoss(weight=torch.tensor([0.28, 0.16, 0.1, 0.14, 0.22, 0.1]).to(self.model.device))
 
     def predict(self, data):
         conv_length = data[2]
         inputs = []
-        for mod in self.config.concat_modalities:
+        for mod in self.config.early_fusion_modalities:
             feat = torch.tensor([i for item in data[DATA_IDX[mod]] for i in item]).float().to(self.model.device)
             inputs.append(feat)
         concatenated = torch.cat(inputs, dim=1)
@@ -612,7 +614,7 @@ class ConcatenatedModel(Model):
 
     @property
     def checkpoint(self):
-        return self.config.concat_checkpoint
+        return self.config.early_fusion_checkpoint
 
 
 class HybridModel(Model):
@@ -628,7 +630,7 @@ class HybridModel(Model):
     def build(self):
 
         # Concatenated Model
-        self.concatenated_model = ConcatenatedModel(self.config)
+        self.concatenated_model = EarlyFusionModel(self.config)
         self.concatenated_model.build()
 
         # Text Model
@@ -733,10 +735,10 @@ class Solver(object):
                     self.models.append(AudioModel(self.config))
                 elif mod == 'visual':
                     self.models.append(VisualModel(self.config))
-                elif mod == 'combined':
-                    self.models.append(CombinedModel(self.config))
-                elif mod == 'concat':
-                    self.models.append(ConcatenatedModel(self.config))
+                elif mod == 'late_fusion':
+                    self.models.append(LateFusionModel(self.config))
+                elif mod == 'early_fusion':
+                    self.models.append(EarlyFusionModel(self.config))
                 elif mod == 'hybrid':
                     self.models.append(HybridModel(self.config))
 

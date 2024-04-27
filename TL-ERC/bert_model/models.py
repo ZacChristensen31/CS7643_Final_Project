@@ -252,6 +252,7 @@ class ConcatenatedClassifier(nn.Module):
     """
         Since ContextClassifier can handle different modalities, this is going to mimic the same functionality
         but with the ability to concatenate multiple modalities together before classification
+        --> early fusion model
     """
     def __init__(self, config):
 
@@ -259,34 +260,34 @@ class ConcatenatedClassifier(nn.Module):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.config = config
         self.input_dim = np.sum([getattr(config, f'{i}_input_dim')
-                                 for i in self.config.concat_modalities])
-        self.dir_dim = BIDIRECTIONAL_DIM[getattr(config, 'concat_bidirectional')]
+                                 for i in self.config.early_fusion_modalities])
+        self.dir_dim = BIDIRECTIONAL_DIM[getattr(config, 'early_fusion_bidirectional')]
 
-        if config.concat_rnn is not None:
-            self.concat_hidden_size = getattr(config, 'concat_hidden_size')
-            self.rnn = getattr(nn, config.concat_rnn.upper())(input_size=self.input_dim,
-                                                             hidden_size=self.concat_hidden_size // self.dir_dim,
-                                                             num_layers=getattr(config, 'concat_num_layers'),
-                                                             bidirectional=getattr(config, 'concat_bidirectional'),
+        if config.early_fusion_rnn is not None:
+            self.early_fusion_hidden_size = getattr(config, 'early_fusion_hidden_size')
+            self.rnn = getattr(nn, config.early_fusion_rnn.upper())(input_size=self.input_dim,
+                                                             hidden_size=self.early_fusion_hidden_size // self.dir_dim,
+                                                             num_layers=getattr(config, 'early_fusion_num_layers'),
+                                                             bidirectional=getattr(config, 'early_fusion_bidirectional'),
                                                              batch_first=True)
         else:
-            self.concat_hidden_size = self.input_dim
+            self.early_fusion_hidden_size = self.input_dim
 
         # Deal with Audio RNN
-        self.fc1 = nn.Linear(self.concat_hidden_size, self.concat_hidden_size)
-        self.dropout1 = nn.Dropout(getattr(config, 'concat_dropout'))
-        self.act1 = getattr(nn.functional, getattr(config, 'concat_activation'))
-        self.fc2 = nn.Linear(self.concat_hidden_size, self.concat_hidden_size)
-        self.dropout2 = nn.Dropout(getattr(config, 'concat_dropout'))
-        self.act2 = getattr(nn.functional, getattr(config, 'concat_activation'))
-        self.fc3 = nn.Linear(self.concat_hidden_size, config.num_classes)
+        self.fc1 = nn.Linear(self.early_fusion_hidden_size, self.early_fusion_hidden_size)
+        self.dropout1 = nn.Dropout(getattr(config, 'early_fusion_dropout'))
+        self.act1 = getattr(nn.functional, getattr(config, 'early_fusion_activation'))
+        self.fc2 = nn.Linear(self.early_fusion_hidden_size, self.early_fusion_hidden_size)
+        self.dropout2 = nn.Dropout(getattr(config, 'early_fusion_dropout'))
+        self.act2 = getattr(nn.functional, getattr(config, 'early_fusion_activation'))
+        self.fc3 = nn.Linear(self.early_fusion_hidden_size, config.num_classes)
 
     def get_init_h(self, batch):
-        h = to_var(torch.zeros(self.config.concat_num_layers * self.dir_dim,
-                               batch, self.concat_hidden_size // self.dir_dim))
-        if self.config.concat_rnn.upper()=='GRU':
+        h = to_var(torch.zeros(self.config.early_fusion_num_layers * self.dir_dim,
+                               batch, self.early_fusion_hidden_size // self.dir_dim))
+        if self.config.early_fusion_rnn.upper()=='GRU':
             return h
-        elif self.config.concat_rnn.upper()=='LSTM':
+        elif self.config.early_fusion_rnn.upper()=='LSTM':
             return (h, h)  #init hidden and cell state
 
     def pack_input_seq(self, seq_input, lengths):
@@ -305,7 +306,7 @@ class ConcatenatedClassifier(nn.Module):
 
     def forward(self, input_data, seq_lengths):
 
-        if self.config.concat_rnn is not None:
+        if self.config.early_fusion_rnn is not None:
             packed_input = self.pack_input_seq(input_data, seq_lengths)
             hidden, _ = self.rnn(packed_input, self.get_init_h(len(seq_lengths)))
             hidden, _ = pad_packed_sequence(hidden, batch_first=True)
@@ -322,16 +323,17 @@ class ConcatenatedClassifier(nn.Module):
 class MLP(nn.Module):
     """
     Classification head on concatenated multi-modal predictors
+    ie, late fusion model
     """
     def __init__(self, config, input_dim):
         super(MLP, self).__init__()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.config = config
 
-        self.fc1 = nn.Linear(input_dim, config.combined_hidden_dim)
-        self.dropout = nn.Dropout(config.combined_dropout)
-        self.act = getattr(nn.functional, config.combined_activation)
-        self.fc2 = nn.Linear(config.combined_hidden_dim, config.num_classes)
+        self.fc1 = nn.Linear(input_dim, config.late_fusion_hidden_dim)
+        self.dropout = nn.Dropout(config.late_fusion_dropout)
+        self.act = getattr(nn.functional, config.late_fusion_activation)
+        self.fc2 = nn.Linear(config.late_fusion_hidden_dim, config.num_classes)
 
     def forward(self, input):
         input = self.act(self.fc1(input))

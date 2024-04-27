@@ -142,16 +142,16 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--visual_num_layers', type=int, default=1)
 
     # CONCATENATED MODEL PARAMETERS
-    parser.add_argument('--concat_checkpoint', type=str, default=None)
-    parser.add_argument('--concat_model', type=str, default='ConcatenatedClassifier')
-    parser.add_argument('--concat_activation', type=str, default='relu')
-    parser.add_argument('--concat_dropout', type=float, default=0.1)
-    parser.add_argument('--concat_hidden_size', type=int, default=256)
-    parser.add_argument('--concat_learning_rate', type=float, default=1e-3)
-    parser.add_argument('--concat_rnn', type=str, default='gru')
-    parser.add_argument('--concat_bidirectional', type=str2bool, default=True)
-    parser.add_argument('--concat_num_layers', type=int, default=1)
-    parser.add_argument('--concat_modalities', type=list, default=['text','audio','visual'], nargs='+')
+    parser.add_argument('--early_fusion_checkpoint', type=str, default=None)
+    parser.add_argument('--early_fusion_model', type=str, default='ConcatenatedClassifier')
+    parser.add_argument('--early_fusion_activation', type=str, default='relu')
+    parser.add_argument('--early_fusion_dropout', type=float, default=0.1)
+    parser.add_argument('--early_fusion_hidden_size', type=int, default=256)
+    parser.add_argument('--early_fusion_learning_rate', type=float, default=1e-3)
+    parser.add_argument('--early_fusion_rnn', type=str, default='gru')
+    parser.add_argument('--early_fusion_bidirectional', type=str2bool, default=True)
+    parser.add_argument('--early_fusion_num_layers', type=int, default=1)
+    parser.add_argument('--early_fusion_modalities', type=list, default=['text','audio','visual'], nargs='+')
 
 
     # HYBRID MODEL PARAMETERS
@@ -166,13 +166,13 @@ def get_config(parse=True, **optional_kwargs):
     #COMBINATION MODEL PARAMETERS
     #--> push raw features through single model together?
     #--> train independently and combine predictions?
-    parser.add_argument('--combined_checkpoint', type=str, default=None)
-    parser.add_argument('--combined_model', type=str, default='MLP')
-    parser.add_argument('--combined_modalities', type=list, default=['text','audio','visual'], nargs='+')
-    parser.add_argument('--combined_activation', type=str, default='relu')
-    parser.add_argument('--combined_dropout', type=float, default=0.1)
-    parser.add_argument('--combined_hidden_dim', type=int, default=128)
-    parser.add_argument('--combined_learning_rate', type=float, default=1e-3)
+    parser.add_argument('--late_fusion_checkpoint', type=str, default=None)
+    parser.add_argument('--late_fusion_model', type=str, default='MLP')
+    parser.add_argument('--late_fusion_modalities', type=list, default=['text','audio','visual','early_fusion'], nargs='+')
+    parser.add_argument('--late_fusion_activation', type=str, default='relu')
+    parser.add_argument('--late_fusion_dropout', type=float, default=0.1)
+    parser.add_argument('--late_fusion_hidden_dim', type=int, default=128)
+    parser.add_argument('--late_fusion_learning_rate', type=float, default=1e-3)
 
     # Utility
     parser.add_argument('--print_every', type=int, default=100)
