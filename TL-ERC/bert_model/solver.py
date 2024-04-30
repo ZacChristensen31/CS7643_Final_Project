@@ -381,7 +381,7 @@ class VisualModel(Model):
 
     def build(self):
         if self.model is None:
-            self.model = getattr(models, self.config.audio_model)(self.config, 'visual')
+            self.model = getattr(models, self.config.visual_model)(self.config, 'visual')
 
         if torch.cuda.is_available():
             self.model.cuda()
