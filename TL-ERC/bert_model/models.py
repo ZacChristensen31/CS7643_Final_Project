@@ -192,7 +192,7 @@ class ContextClassifier(nn.Module):
         self.dir_dim = BIDIRECTIONAL_DIM[self.get_attr('bidirectional')]
 
         # add optional RNN context layer across sentences
-        if config.audio_rnn is not None:
+        if self.get_attr('rnn') is not None:
             self.hidden_size = self.get_attr('hidden_size')
             self.rnn = getattr(nn, self.get_attr('rnn').upper())(input_size=self.input_dim,
                                                              hidden_size=self.hidden_size // self.dir_dim,
