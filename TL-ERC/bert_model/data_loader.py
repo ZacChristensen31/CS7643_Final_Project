@@ -3,12 +3,11 @@ from collections import defaultdict
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
 from pytorch_pretrained_bert.tokenization import BertTokenizer
-from iemocap_preprocess import pad_sentences
 
 SEQ_LEN = 30
 
 class DialogDataset(Dataset):
-    def __init__(self, conversations, labels, conversation_length, sentence_length, audio, visual, audioWav2Vec, data=None):
+    def __init__(self, conversations, labels, conversation_length, sentence_length, audio, visual, bertText, data=None):
 
         # [total_data_size, max_conversation_length, max_sentence_length]
         # tokenized raw text of sentences
@@ -26,18 +25,12 @@ class DialogDataset(Dataset):
         self.visual = visual
         self.data = data
         self.len = len(conversations)
-        self.audioWav2Vec = audioWav2Vec
+        self.bertText = bertText
 
         # Prepare for BERT
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased", do_lower_case=True)
         self.prepare_BERT()
 
-        #Pad audio to max length -- borrow function from text preprocessing, but too big to preprocess and store
-        # self.raw_audio,_ = pad_sentences(raw_audio,
-        #                                  max_sentence_length=AUDIO_LEN,
-        #                                  max_conversation_length=max(self.conversation_length),
-        #                                  eos_token=0,
-        #                                  pad_token=0)
 
     def prepare_BERT(self,):
 
@@ -109,17 +102,17 @@ class DialogDataset(Dataset):
         conversation_length = self.conversation_length[index]
         sentence_length = self.sentence_length[index]
         audio = self.audio[index]
-        audioWav2Vec = self.audioWav2Vec[index]
+        bertText = self.bertText[index]
         visual = self.visual[index]
         type_id = self.type_ids[index]
         masks = self.masks[index]
-        return conversation, labels, conversation_length, sentence_length, audio, visual,audioWav2Vec, type_id, masks
+        return conversation, labels, conversation_length, sentence_length, audio, visual,bertText, type_id, masks
 
     def __len__(self):
         return self.len
 
 
-def get_loader(sentences, labels, conversation_length, sentence_length, audio, visual, audioWav2Vec, batch_size=100, data=None, shuffle=True):
+def get_loader(sentences, labels, conversation_length, sentence_length, audio, visual, bertText, batch_size=100, data=None, shuffle=True):
     """Load DataLoader of given DialogDataset"""
 
     dataset = DialogDataset(sentences,
@@ -128,7 +121,7 @@ def get_loader(sentences, labels, conversation_length, sentence_length, audio, v
                             sentence_length,
                             audio,
                             visual,
-                            audioWav2Vec,
+                            bertText,
                             data=data)
 
     for sentence, label in zip(sentences, labels):
@@ -151,10 +144,10 @@ def get_loader(sentences, labels, conversation_length, sentence_length, audio, v
         data.sort(key=lambda x: x[2], reverse=True)
 
         # Separate
-        sentences, labels, conversation_length, sentence_length, audio, visual, audioWav2Vec, type_id, mask = zip(*data)
+        sentences, labels, conversation_length, sentence_length, audio, visual, bertText, type_id, mask = zip(*data)
 
         # return sentences, conversation_length, sentence_length.tolist()
-        return sentences, labels, conversation_length, sentence_length, audio, visual, audioWav2Vec, type_id, mask
+        return sentences, labels, conversation_length, sentence_length, audio, visual, bertText, type_id, mask
 
 
     data_loader = DataLoader(

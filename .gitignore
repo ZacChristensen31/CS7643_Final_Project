@@ -161,3 +161,4 @@ cython_debug/
 TL-ERC/images
 TL-ERC/run_outputs
 TL-ERC/glove
+*.pyc

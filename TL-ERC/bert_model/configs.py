@@ -55,7 +55,7 @@ class Config(object):
         self.sentence_length_path = self.data_dir.joinpath('sentence_length.pkl')
         self.conversation_length_path = self.data_dir.joinpath('conversation_length.pkl')
         self.audio_path = self.data_dir.joinpath('audio.pkl')
-        self.audio_wav2vec_path = self.data_dir.joinpath('audio_wav2vec.pkl')
+        self.bertText_path = self.data_dir.joinpath('bertText.pkl')
         self.visual_path = self.data_dir.joinpath('visuals.pkl')
 
     def __str__(self):
@@ -84,7 +84,7 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--num_classes', type=int, default=0) 
     parser.add_argument('--batch_size', type=int, default=2)        #really small?
     parser.add_argument('--eval_batch_size', type=int, default=2)   #really small?
-    parser.add_argument('--n_epoch', type=int, default=20)          #Usually stops early @ ~15-20
+    parser.add_argument('--n_epoch', type=int, default=40)          #Usually stops early @ ~15-20
     parser.add_argument('--patience', type=int, default=5)          #lowered from 10 for efficiency during testing
     parser.add_argument('--minimum_improvement', type=int, default=0.001)
     parser.add_argument('--learning_rate', type=float, default=1e-4)
@@ -111,17 +111,68 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--context_size', type=int, default=256)
     parser.add_argument('--feedforward', type=str, default='FeedForward')
     parser.add_argument('--activation', type=str, default='Tanh')
+    parser.add_argument('--text_input_dim', type=int, default=768)
 
     #AUDIO MODEL PARAMETERS
     parser.add_argument('--audio_checkpoint', type=str, default=None)
+    parser.add_argument('--audio_model', type=str, default='ContextClassifier')
+    # parser.add_argument('--audio_base_model', type=str, default="facebook/wav2vec2-base-960h")
+    # parser.add_argument('--audio_pooling', type=str, default='max')
+    parser.add_argument('--audio_activation', type=str, default='relu')
+    parser.add_argument('--audio_input_dim', type=int, default=100)
+    parser.add_argument('--audio_dropout', type=float, default=0.2)
+    parser.add_argument('--audio_hidden_size', type=int, default=256)
+    parser.add_argument('--audio_learning_rate', type=float, default=1e-3)
+    # parser.add_argument('--audio_freeze_base', type=float, default=True)
+    parser.add_argument('--audio_rnn', type=str, default='gru')
+    parser.add_argument('--audio_bidirectional', type=str2bool, default=True)
+    parser.add_argument('--audio_num_layers', type=int, default=1)
+
 
     #VISUAL MODEL PARAMETERS
     parser.add_argument('--visual_checkpoint', type=str, default=None)
+    parser.add_argument('--visual_model', type=str, default='ContextClassifier')
+    parser.add_argument('--visual_activation', type=str, default='relu')
+    parser.add_argument('--visual_input_dim', type=int, default=512)
+    parser.add_argument('--visual_dropout', type=float, default=0.2)
+    parser.add_argument('--visual_hidden_size', type=int, default=256)
+    parser.add_argument('--visual_learning_rate', type=float, default=1e-3)
+    parser.add_argument('--visual_rnn', type=str, default='gru')
+    parser.add_argument('--visual_bidirectional', type=str2bool, default=True)
+    parser.add_argument('--visual_num_layers', type=int, default=1)
+
+    # CONCATENATED MODEL PARAMETERS
+    parser.add_argument('--early_fusion_checkpoint', type=str, default=None)
+    parser.add_argument('--early_fusion_model', type=str, default='ConcatenatedClassifier')
+    parser.add_argument('--early_fusion_activation', type=str, default='relu')
+    parser.add_argument('--early_fusion_dropout', type=float, default=0.1)
+    parser.add_argument('--early_fusion_hidden_size', type=int, default=256)
+    parser.add_argument('--early_fusion_learning_rate', type=float, default=1e-3)
+    parser.add_argument('--early_fusion_rnn', type=str, default='gru')
+    parser.add_argument('--early_fusion_bidirectional', type=str2bool, default=True)
+    parser.add_argument('--early_fusion_num_layers', type=int, default=1)
+    parser.add_argument('--early_fusion_modalities', type=list, default=['text','audio','visual'], nargs='+')
+
+
+    # HYBRID MODEL PARAMETERS
+    parser.add_argument('--hybrid_checkpoint', type=str, default=None)
+    parser.add_argument('--hybrid_model', type=str, default='MLP')
+    parser.add_argument('--hybrid_activation', type=str, default='relu')
+    parser.add_argument('--hybrid_dropout', type=float, default=0.1)
+    parser.add_argument('--hybrid_hidden_dim', type=int, default=128)
+    parser.add_argument('--hybrid_learning_rate', type=float, default=1e-3)
+
 
     #COMBINATION MODEL PARAMETERS
     #--> push raw features through single model together?
     #--> train independently and combine predictions?
-    parser.add_argument('--combined_checkpoint', type=str, default=None)
+    parser.add_argument('--late_fusion_checkpoint', type=str, default=None)
+    parser.add_argument('--late_fusion_model', type=str, default='MLP')
+    parser.add_argument('--late_fusion_modalities', type=list, default=['text','audio','visual','early_fusion'], nargs='+')
+    parser.add_argument('--late_fusion_activation', type=str, default='relu')
+    parser.add_argument('--late_fusion_dropout', type=float, default=0.1)
+    parser.add_argument('--late_fusion_hidden_size', type=int, default=128)
+    parser.add_argument('--late_fusion_learning_rate', type=float, default=1e-3)
 
     # Utility
     parser.add_argument('--print_every', type=int, default=100)
